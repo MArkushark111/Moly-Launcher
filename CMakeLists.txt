@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
-project(MolyLauncher VERSION 0.4.0 LANGUAGES CXX)
+project(MolyLauncher VERSION 0.5.0 LANGUAGES CXX)
 set(CMAKE_INSTALL_BINDIR ".")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-find_package(Qt6 6.11 REQUIRED COMPONENTS Core CorePrivate Gui Quick QuickControls2 Network Concurrent Test)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core CorePrivate Gui Quick QuickControls2 Network Concurrent Sql Test)
 qt_standard_project_setup(REQUIRES 6.11)
 add_library(moly_engine STATIC
     src/core.cpp src/core.h src/network.cpp src/network.h
@@ -14,9 +14,9 @@ target_link_libraries(moly_engine PUBLIC Qt6::Core Qt6::Network Qt6::Concurrent 
 if(WIN32)
     target_link_libraries(moly_engine PRIVATE advapi32)
 endif()
-add_library(moly_desktop STATIC src/artwork.cpp src/artwork.h src/playtargets.cpp src/playtargets.h src/skinstore.cpp src/skinstore.h src/skinmodel.cpp src/skinmodel.h)
+add_library(moly_desktop STATIC src/instanceimport.cpp src/instanceimport.h src/fileassociation.cpp src/fileassociation.h src/artwork.cpp src/artwork.h src/playtargets.cpp src/playtargets.h src/skinstore.cpp src/skinstore.h src/skinmodel.cpp src/skinmodel.h)
 target_include_directories(moly_desktop PUBLIC src)
-target_link_libraries(moly_desktop PUBLIC moly_engine Qt6::Gui Qt6::Quick Qt6::Network Qt6::Concurrent PRIVATE Qt6::CorePrivate)
+target_link_libraries(moly_desktop PUBLIC moly_engine Qt6::Gui Qt6::Quick Qt6::Network Qt6::Concurrent Qt6::Sql PRIVATE Qt6::CorePrivate)
 file(GLOB default_skin_textures CONFIGURE_DEPENDS "assets/default-skins/wide/*.png" "assets/default-skins/slim/*.png")
 qt_add_resources(moly_desktop "default_skins" PREFIX "/moly/skins" BASE "assets/default-skins" FILES ${default_skin_textures})
 qt_add_executable(MolyLauncher WIN32 src/main.cpp src/launcher.cpp src/launcher.h)
@@ -27,12 +27,12 @@ if(WIN32)
 endif()
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 qt_add_qml_module(MolyLauncher URI Moly VERSION 1.0 QML_FILES
-    qml/MSpinBox.qml qml/ArcSpinner.qml qml/MSlider.qml qml/MComboBox.qml qml/ProviderIcon.qml qml/MMenu.qml qml/MMenuItem.qml qml/MCheckBox.qml qml/TaskActivity.qml qml/InstanceSettings.qml qml/MProgressBar.qml qml/LiquidDialog.qml qml/InstanceAvatar.qml qml/Theme.qml qml/MSwitch.qml qml/Icon.qml qml/NavItem.qml qml/TabStrip.qml qml/InstallDialog.qml
+    qml/ImportInstancesDialog.qml qml/ReorderHandle.qml qml/MSpinBox.qml qml/ArcSpinner.qml qml/MSlider.qml qml/MComboBox.qml qml/ProviderIcon.qml qml/MMenu.qml qml/MMenuItem.qml qml/MCheckBox.qml qml/TaskActivity.qml qml/InstanceSettings.qml qml/MProgressBar.qml qml/LiquidDialog.qml qml/InstanceAvatar.qml qml/Theme.qml qml/MSwitch.qml qml/Icon.qml qml/NavItem.qml qml/TabStrip.qml qml/InstallDialog.qml
     qml/Main.qml qml/MButton.qml qml/MField.qml qml/Panel.qml qml/Badge.qml
     qml/LibraryPage.qml qml/InstancePage.qml qml/DiscoverPage.qml
     qml/AccountsPage.qml qml/SettingsPage.qml qml/LogView.qml qml/LogWindow.qml
     qml/MediaImage.qml qml/SkinsPage.qml qml/PlayTargets.qml qml/CreateInstanceDialog.qml qml/DownloadManager.qml
-    RESOURCES assets/modrinth.svg assets/curseforge.svg assets/moly.svg assets/moly-monochrome.svg assets/Inter.ttf assets/Inter-OFL.txt)
+    RESOURCES assets/prism.svg assets/multimc.svg assets/atlauncher.png assets/lunar.ico assets/minecraft-folder.svg assets/modrinth.svg assets/curseforge.svg assets/moly.svg assets/moly-monochrome.svg assets/Inter.ttf assets/Inter-OFL.txt)
 target_link_libraries(MolyLauncher PRIVATE moly_desktop Qt6::QuickControls2)
 enable_testing()
 qt_add_executable(moly_tests tests/core_tests.cpp)
@@ -81,3 +81,7 @@ include(CPack)
 
 qt_add_executable(confirm_integration tests/confirm_integration.cpp src/launcher.cpp src/launcher.h)
 target_link_libraries(confirm_integration PRIVATE moly_desktop)
+
+qt_add_executable(instanceimport_tests tests/instanceimport_tests.cpp)
+target_link_libraries(instanceimport_tests PRIVATE moly_desktop Qt6::Test Qt6::Sql)
+add_test(NAME local_instance_import COMMAND instanceimport_tests)

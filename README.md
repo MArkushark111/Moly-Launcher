@@ -2,11 +2,11 @@
 
 A Windows Minecraft Java Edition launcher built with C++20 and Qt Quick. Moly keeps each Minecraft setup in its own **instance**, so its worlds, mods, resource packs, and shaders stay together.
 
-This is a **0.4.0 preview**. The launcher has working installation and local launch paths; Microsoft sign-in and CurseForge require your own service credentials.
+This is a **0.5.0 preview**. The launcher has working installation and local launch paths; Microsoft sign-in and CurseForge require your own service credentials.
 
 ## Run the portable build
 
-Extract the entire `MolyLauncher-0.4.0-Windows-x64.zip` archive, then open **MolyLauncher.exe**. Keep the accompanying DLLs and folders beside it. The executable in `dist/MolyLauncher-0.4.0/` is also ready to run without a Qt installation.
+Extract the entire `MolyLauncher-0.5.0-Windows-x64.zip` archive, then open **MolyLauncher.exe**. Keep the accompanying DLLs and folders beside it. The executable in `dist/MolyLauncher-0.5.0/` is also ready to run without a Qt installation.
 
 ## First use
 
@@ -89,7 +89,7 @@ Inside the data folder, `instances/<id>/game` holds each instance's game files. 
 .\scripts\build.ps1 -Package
 ```
 
-This prepares the app with its Qt runtime under `dist/MolyLauncher-0.4.0` and creates a ZIP. With an installed Inno Setup compiler, pass its `ISCC.exe` path using `-InnoCompiler` to build the installer described by `packaging/moly.iss`.
+This prepares the app with its Qt runtime under `dist/MolyLauncher-0.5.0` and creates a ZIP. With an installed Inno Setup compiler, pass its `ISCC.exe` path using `-InnoCompiler` to build the installer described by `packaging/moly.iss`.
 
 The packaging recipe does not provide a code-signing certificate. A clean-machine installation test and a signed release are still release tasks. See [THIRD_PARTY.md](THIRD_PARTY.md) for runtime notices and [docs/TESTING.md](docs/TESTING.md) for verification details.
 
@@ -115,3 +115,13 @@ Microsoft sign-in setup is explained in [docs/MICROSOFT_SIGN_IN.md](docs/MICROSO
 Settings is grouped into Appearance, Game, Connections, and Advanced tabs. Accent color also styles sliders, dropdowns, and focus indicators. Customize the instance sidebar, Library mod counts, GIF playback, server signals, and task history. Each instance can override memory, window size/fullscreen, Java arguments, and whether Moly stays visible during play. The Library keeps saved worlds/servers above the instance list without a duplicate selected-instance banner.
 
 CurseForge secrets stay in Windows Credential Manager and are never bundled in this repository or the portable build. This computer keeps its existing connection; another computer needs its own configuration (the advanced `MOLY_CURSEFORGE_API_KEY` environment variable is also supported). Microsoft sign-in still requires a registered public-client application ID and API access.
+
+## Bring local instances to Moly
+
+Choose **Import > Import instance from this computer** or **Create instance > Bring a setup > Import instance**. Select a launcher to find its usual local data folders. Modrinth and CurseForge here mean setups already on your PC. Choose a different folder for portable installations or moved libraries. Check the displayed Minecraft/loader versions, close Minecraft for that setup, and choose whether to include worlds.
+
+Modrinth's current SQLite database and older folder profiles, Prism/MultiMC, CurseForge and ATLauncher metadata are recognized. Other game folders can supply ordinary Minecraft files after you enter their exact game and loader versions. Lunar's own bundled client features/cosmetics and arbitrary launcher components cannot run in Moly. The importer copies known game-data folders; it does not copy launcher login databases, Java executables, or launcher commands. Imported files are local content; original launcher update links are not carried over.
+
+Drag the six-dot handles to arrange instances. Dropping above/below an instance places it before/after; **My order** keeps that layout across restarts. Focus a handle and use **Alt+Up/Down** for keyboard ordering.
+
+The Windows installer associates **.mlypack** with Moly. For the portable build, use **Settings > Advanced > Use Moly for .mlypack**. Explorer then shows Moly's icon and double-clicking opens a confirmation. If Moly is already open, the request goes to its existing window.

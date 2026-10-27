@@ -13,20 +13,23 @@ Item {
             return (i.name + " " + i.loader + " " + i.version + " " + i.group).toLowerCase().indexOf(needle) !== -1;
         });
         const sort = sortChoice.currentIndex;
+        if(sort===0)return list;
         list.sort(function (a, b) {
-            if (sort === 1)
-                return new Date(b.lastPlayed || 0).getTime() - new Date(a.lastPlayed || 0).getTime();
             if (sort === 2)
+                return new Date(b.lastPlayed || 0).getTime() - new Date(a.lastPlayed || 0).getTime();
+            if (sort === 3)
                 return (a.loader + a.version).localeCompare(b.loader + b.version);
             return a.name.localeCompare(b.name);
         });
         return list;
     }
     function openInstance(i) {
+        if(i._pending){shell.showPendingInstance();return;}
         launcher.selectInstance(i.id);
         shell.navigate("instance");
     }
     function playInstance(i) {
+        if(i._pending){shell.showPendingInstance();return;}
         launcher.selectInstance(i.id);
         if (i.installed && !i.running)
             launcher.play();
@@ -87,8 +90,8 @@ Item {
                         onTriggered: shell.chooseFile("pack")
                     }
                     MMenuItem {
-                        text: "Copy a Prism instance"
-                        onTriggered: shell.chooseFolder("prism")
+                        text: "Import instance from this computer"
+                        onTriggered: shell.importInstances()
                     }
                 }
             }
@@ -107,7 +110,7 @@ Item {
             items: { const all=playTargets.items; const worlds=all.filter(function(i){return i.type==="world"});const servers=all.filter(function(i){return i.type==="server"});return worlds.length&&servers.length?[worlds[0],servers[0]].concat(worlds.slice(1),servers.slice(1)):all }
             loading: playTargets.loading
             checkingStatus: playTargets.checkingStatus
-            maximumRows: 3
+            maximumRows: launcher.settings.quickAccessRows||3
             pingColor: Theme.serverAccent
             actionsEnabled: !launcher.busy
             onActivated: function(entry) { page.shell.launchTarget(entry) }
@@ -128,7 +131,9 @@ Item {
                 id: sortChoice
                 Layout.preferredWidth: 156
                 implicitHeight: 36
-                model: ["Name (A–Z)", "Last played", "Loader"]
+                model: ["My order", "Name (A-Z)", "Last played", "Loader"]
+                currentIndex:Math.max(0,["manual","name","recent","loader"].indexOf(launcher.settings.librarySort||"manual"))
+                onActivated:launcher.setUiPreferences({librarySort:["manual","name","recent","loader"][currentIndex]})
                 Accessible.name: "Sort instances"
             }
             MButton {
@@ -229,13 +234,13 @@ Item {
                         padding: 0
                         hoverEnabled: true
                         Accessible.name: modelData.name + ", " + modelData.loader + " " + modelData.version
-                        onClicked: launcher.selectInstance(modelData.id)
+                        onClicked: {if(modelData._pending)shell.showPendingInstance();else launcher.selectInstance(modelData.id)}
                         onDoubleClicked: page.openInstance(modelData)
                         background: Rectangle {
                             anchors.fill: parent
                             anchors.margins: 4
                             radius: 12
-                            color: launcher.selectedId === row.modelData.id ? Theme.accentSoft : row.hovered ? Theme.surface2 : "transparent"
+                            color: row.modelData.installing ? Theme.app : launcher.selectedId === row.modelData.id ? Theme.accentSoft : row.hovered ? Theme.surface2 : "transparent"
                             border.width: row.activeFocus ? 2 : 0
                             border.color: Theme.accent
                             Behavior on color {
@@ -244,6 +249,7 @@ Item {
                                 }
                             }
                         }
+                        DropArea {anchors.fill:parent;keys:["moly-instance"];onDropped:function(drop){if(drop.source&&!row.modelData._pending){const id=drop.source.instanceId,target=row.modelData.id,after=drop.y>height/2;Qt.callLater(function(){launcher.moveInstance(id,target,after)});drop.acceptProposedAction()}};Rectangle {visible:parent.containsDrag;anchors.top:parent.top;anchors.margins:4;width:parent.width;height:3;radius:2;color:Theme.accent}}
                         contentItem: Item {
                             RowLayout {
                                 height: 40
@@ -253,7 +259,9 @@ Item {
                                 anchors.right: parent.right
                                 anchors.leftMargin: 16
                                 anchors.rightMargin: 16
+                                ReorderHandle {instanceId:row.modelData.id;available:!row.modelData._pending;Layout.preferredWidth:18;Layout.preferredHeight:30}
                                 InstanceAvatar {
+                                    opacity:row.modelData.installing?0.45:1
                                     Layout.preferredWidth: 36
                                     Layout.preferredHeight: 36
                                     width: 36
@@ -276,7 +284,7 @@ Item {
                                         Layout.fillWidth: true
                                     }
                                     Text {
-                                        text: row.modelData.running ? "Running" : row.modelData.group || "My instances"
+                                        text: row.modelData.installing ? "Installing…" : row.modelData._pending ? row.modelData.status : row.modelData.running ? "Running" : row.modelData.group || "My instances"
                                         color: row.modelData.running ? Theme.success : Theme.textMuted
                                         font.pixelSize: 11
                                         elide: Text.ElideRight
@@ -318,8 +326,8 @@ Item {
                                     Layout.preferredHeight: 32
                                     MButton {
                                         anchors.fill: parent
-                                        loading: launcher.busy && launcher.taskInstanceId === row.modelData.id
-                                        text: loading ? (launcher.taskOperation === "launch" ? "Starting" : "Working") : row.modelData.running ? "Open" : row.modelData.installed ? "Play" : "Set up"
+                                        loading: row.modelData.installing || (launcher.busy && launcher.taskInstanceId === row.modelData.id)
+                                        text: loading ? (launcher.taskOperation === "launch" ? "Starting" : "Install") : row.modelData.running ? "Open" : row.modelData.installed ? "Play" : "Set up"
                                         kind: row.modelData.running || !row.modelData.installed ? "secondary" : "primary"
                                         opacity: 1
                                         enabled: !launcher.busy
@@ -357,7 +365,7 @@ Item {
                             padding: 16
                             hoverEnabled: true
                             scale: hovered && Theme.motion ? 1.015 : 1
-                            onClicked: launcher.selectInstance(modelData.id)
+                            onClicked: {if(modelData._pending)shell.showPendingInstance();else launcher.selectInstance(modelData.id)}
                             onDoubleClicked: page.openInstance(modelData)
                             Accessible.name: modelData.name
                             Behavior on scale {
@@ -368,10 +376,10 @@ Item {
                             }
                             background: Rectangle {
                                 radius: 18
-                                color: launcher.selectedId === modelData.id ? Theme.accentSoft : card.hovered ? Theme.surface2 : Theme.app
+                                color: modelData.installing ? Theme.app : launcher.selectedId === modelData.id ? Theme.accentSoft : card.hovered ? Theme.surface2 : Theme.app
                                 border.color: card.activeFocus ? Theme.accent : card.hovered ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.38) : Theme.border
                                 border.width: card.activeFocus ? 2 : 1
-                                ArtworkView {anchors.fill:parent;radius:18;source:modelData.backgroundUrl||"";shade:launcher.settings.backgroundDim===undefined?0.5:launcher.settings.backgroundDim;animated:Theme.motion&&launcher.settings.animateArtwork!==false}
+                                ArtworkView {anchors.fill:parent;radius:18;source:modelData.backgroundUrl||"";opacity:modelData.installing?0.4:1;shade:launcher.settings.backgroundDim===undefined?0.5:launcher.settings.backgroundDim;animated:Theme.motion&&launcher.settings.animateArtwork!==false}
                                 Behavior on color {
                                     ColorAnimation {
                                         duration: Theme.motion ? 160 : 0
@@ -383,6 +391,7 @@ Item {
                                     }
                                 }
                             }
+                            DropArea {anchors.fill:parent;keys:["moly-instance"];onDropped:function(drop){if(drop.source&&!modelData._pending){const id=drop.source.instanceId,target=modelData.id,after=drop.y>height/2;Qt.callLater(function(){launcher.moveInstance(id,target,after)});drop.acceptProposedAction()}};Rectangle {visible:parent.containsDrag;anchors.top:parent.top;width:parent.width;height:3;radius:2;color:Theme.accent}}
                             contentItem: ColumnLayout {
                                 spacing: 10
                                 RowLayout {
@@ -394,6 +403,7 @@ Item {
                                         width: 32
                                         height: 32
                                         imageSource: modelData.iconUrl || ""
+                                        opacity:modelData.installing?0.45:1
                                     }
                                     Text {
                                         text: modelData.name
@@ -412,13 +422,14 @@ Item {
                                 }
                                 RowLayout {
                                     Text {
-                                        text: modelData.running ? "Running" : page.lastPlayed(modelData.lastPlayed)
+                                        text: modelData.installing ? "Installing…" : modelData._pending ? modelData.status : modelData.running ? "Running" : page.lastPlayed(modelData.lastPlayed)
                                         color: modelData.running ? Theme.success : Theme.textMuted
                                         font.pixelSize: 11
                                         Layout.fillWidth: true
                                     }
+                                    ReorderHandle {instanceId:modelData.id;available:!modelData._pending;Layout.preferredWidth:20;Layout.preferredHeight:28}
                                     MButton {
-                                        loading: launcher.busy && launcher.taskInstanceId === modelData.id
+                                        loading: modelData.installing || (launcher.busy && launcher.taskInstanceId === modelData.id)
                                         text: loading ? "Starting" : modelData.running ? "Open" : modelData.installed ? "Play" : "Set up"
                                         kind: modelData.installed && !modelData.running ? "primary" : "secondary"
                                         implicitHeight: 30
@@ -476,7 +487,7 @@ Item {
         }
         Text {
             visible: !!page.selectedInstance.id
-            text: "Double-click an instance to manage it, or drop a .jar file to add a mod to the selected instance."
+            text: "Drag the six-dot handle to arrange instances. Double-click to manage; drop a .jar file to add a mod."
             color: Theme.textMuted
             font.pixelSize: 11
             wrapMode: Text.Wrap

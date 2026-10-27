@@ -1,4 +1,7 @@
-﻿#include "launcher.h"
+#include "instanceimport.h"
+#include "fileassociation.h"
+#include <QCoreApplication>
+#include "launcher.h"
 #include "accounts.h"
 #include "content.h"
 #include "minecraft.h"
@@ -59,6 +62,7 @@ Launcher::Launcher(QString location, QObject *parent) : QObject(parent), root(st
     QTimer::singleShot(250,this,&Launcher::refreshPackIcons);
 }
 Launcher::~Launcher() {
+    localScanCancelled=true;localScanWatcher.waitForFinished();
     choicesCancelled=true;choicesWatcher.waitForFinished();
     iconCancelled=true;iconWatcher.waitForFinished();
     cancelled = true;
@@ -113,6 +117,11 @@ void Launcher::reloadInstances() {
                                [this, msg = QString::fromUtf8(e.what())] { emit notice(msg, true); });
         }
     }
+    const auto order=config["instanceOrder"].toArray();
+    std::stable_sort(instanceList.begin(),instanceList.end(),[&](const QJsonObject &a,const QJsonObject &b){
+        auto rank=[&](const QJsonValue &id){for(qsizetype n=0;n<order.size();++n)if(order[n]==id)return int(n);return int(order.size());};
+        return rank(a["id"])<rank(b["id"]);
+    });
     if (current().isEmpty())
         selection = instanceList.isEmpty() ? QString() : instanceList.first()["id"].toString();
     emit changed();
@@ -130,6 +139,7 @@ QVariantList Launcher::instances() const {
         const auto dir = instanceDir(instance);
         instance["running"] = processes.contains(instance["id"].toString());
         instance["installed"] = QFileInfo::exists(dir + "/installation.json");
+        instance["installing"] = working && instance["id"]==activeTaskInstanceId && QStringList{"install","content","local-import"}.contains(activeTaskOperation);
         instance["status"] = instance["running"].toBool()     ? "Running"
                              : instance["installed"].toBool() ? "Installed"
                                                               : "Not installed";
@@ -137,6 +147,7 @@ QVariantList Launcher::instances() const {
             QDir(dir + "/game/mods").entryList({"*.jar", "*.jar.disabled"}, QDir::Files).size();
         instance["iconUrl"] = QString();
         instance["iconUrl"] = artworkUrl(dir,instance["iconFile"].toString(),instance["iconRevision"].toString());
+        if(instance["iconUrl"].toString().isEmpty())instance["iconUrl"]=instance["sourceIconUrl"].toString();
         instance["backgroundUrl"] = artworkUrl(dir,instance["backgroundFile"].toString(),instance["backgroundRevision"].toString());
         auto last = QDateTime::fromString(instance["lastPlayed"].toString(), Qt::ISODate);
         QString relative = "Never";
@@ -154,6 +165,13 @@ QVariantList Launcher::instances() const {
             seconds += startedAt[instance["id"].toString()].secsTo(now);
         instance["playtimeMinutes"] = double(qMax<qint64>(0, seconds) / 60);
         out << instance.toVariantMap();
+    }
+    if(!pendingInstance.isEmpty()) {
+        auto pending=pendingInstance;
+        pending["_pending"]=true;pending["installed"]=false;pending["running"]=false;
+        pending["installing"]=pending["error"].toString().isEmpty()&&(working||automaticInstall);
+        pending["status"]=!pending["error"].toString().isEmpty()?"Needs attention":(working||automaticInstall)?"Installing":"Review required";
+        out.prepend(pending.toVariantMap());
     }
     return out;
 }
@@ -259,6 +277,7 @@ void Launcher::task(const QString &title, std::function<QJsonObject(Context)> wo
     emit busyChanged();
     emit statusChanged();
     emit jobsChanged();
+    if(recordJob)emit changed();
     Context context{&cancelled, [this, generation, recordJob](QString text, qint64 doneCount, qint64 total) {
                         QMetaObject::invokeMethod(
                             this,
@@ -341,6 +360,7 @@ void Launcher::task(const QString &title, std::function<QJsonObject(Context)> wo
                     }
                 }
                 if (failed && (!searchOperation || searchTicket == searchGeneration)) {
+                    if(!pendingInstance.isEmpty())pendingInstance["error"]=statusText;
                     automaticInstall = false;
                     emit installStateChanged();
                     if (recordJob && !jobList.isEmpty() && generation == taskGeneration) {
@@ -392,6 +412,7 @@ void Launcher::retry() {
         startSearch(lastSearchAppend);
     else if (!working && retryWork) {
         automaticInstall = retryOperation == "resolve-auto";
+        if(!pendingInstance.isEmpty())pendingInstance.remove("error");
         task(retryTitle, retryWork, retryDone, retryInstanceId, retryOperation);
     }
 }
@@ -469,7 +490,7 @@ void Launcher::saveInstance(const QVariantMap &values) {
             throw Error("Choose a valid memory allocation.");
         if ((s.contains("width") && (s["width"].toInt() < 640 || s["width"].toInt() > 7680)) ||
             (s.contains("height") && (s["height"].toInt() < 360 || s["height"].toInt() > 4320)))
-            throw Error("Choose a game resolution between 640 � 360 and 7680 � 4320.");
+            throw Error("Choose a game resolution between 640 × 360 and 7680 × 4320.");
         storeInstance(i);
         emit notice("Instance settings saved.", false);
     } catch (const std::exception &e) {
@@ -847,13 +868,18 @@ void Launcher::setReducedMotion(bool enabled) {
 void Launcher::setUiPreferences(const QVariantMap &values) {
     const auto previous=config;
     try {
-        for(const auto &key:QStringList{"animateArtwork","skinIdle","quickAccess","serverPing","showCompletedTasks","libraryGrid","showInstanceRail","showModCounts"})
+        for(const auto &key:QStringList{"animateArtwork","skinIdle","quickAccess","serverPing","showCompletedTasks","libraryGrid","showInstanceRail","showModCounts","openLogsOnLaunch","showQuickAccessRefresh"})
             if(values.contains(key))config[key]=values[key].toBool();
         if(values.contains("pingColor")) {
             const auto color=values["pingColor"].toString().trimmed().toLower();
             if(!color.isEmpty()&&!QRegularExpression("^#[0-9a-f]{6}$").match(color).hasMatch())throw Error("Use a six-digit signal color.");
             config["pingColor"]=color;
         }
+        if(values.contains("sidebarWidth"))config["sidebarWidth"]=qBound(160,values["sidebarWidth"].toInt(),260);
+        if(values.contains("quickAccessRows"))config["quickAccessRows"]=qBound(1,values["quickAccessRows"].toInt(),8);
+        if(values.contains("toastSeconds"))config["toastSeconds"]=qBound(2,values["toastSeconds"].toInt(),15);
+        if(values.contains("startupPage")&&QStringList{"library","discover","skins"}.contains(values["startupPage"].toString()))config["startupPage"]=values["startupPage"].toString();
+        if(values.contains("librarySort")&&QStringList{"manual","name","recent","loader"}.contains(values["librarySort"].toString()))config["librarySort"]=values["librarySort"].toString();
         if(values.contains("backgroundDim"))config["backgroundDim"]=qBound(0.2,values["backgroundDim"].toDouble(),0.95);
         writeObject(root+"/settings.json",config);emit changed();
     }catch(const std::exception &e){config=previous;emit changed();emit notice(QString::fromUtf8(e.what()),true);}
@@ -1183,6 +1209,12 @@ void Launcher::beginInstall(const QVariantMap &project, const QString &requested
         return;
     }
     automaticInstall = automatic;
+    pendingInstance = {};
+    if(automatic && project.value("type")=="modpack") {
+        pendingInstance={{"id",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"name",project.value("title").toString()},
+                         {"iconUrl",project.value("icon").toString()},{"version","Preparing…"},{"loader","Modpack"},{"group","Installing"}};
+        emit changed();
+    }
     review = {};
     installVersionList = {};
     emit planChanged();
@@ -1253,7 +1285,7 @@ void Launcher::planInstall(const QVariantMap &project) {
             installVersionList = plan["availableVersions"].toArray();
             emit installStateChanged();
             enrichReview(plan, target);
-        },data["type"]=="modpack"?QString():target,automaticInstall?"resolve-auto":"resolve");
+        },data["type"]=="modpack"?pendingInstance["id"].toString():target,automaticInstall?"resolve-auto":"resolve");
 }
 void Launcher::checkUpdates() {
     if (!editable())
@@ -1267,6 +1299,7 @@ void Launcher::checkUpdates() {
         [this, target](QJsonObject plan) { enrichReview(plan, target); });
 }
 void Launcher::dismissPlan() {
+    if(!working&&!pendingInstance.isEmpty()){pendingInstance={};emit changed();}
     automaticInstall = false;
     emit installStateChanged();
     review = {};
@@ -1304,16 +1337,19 @@ void Launcher::applyPlan() {
         const bool newInstance = plan.contains("instance");
         if (newInstance) {
             instance = plan["instance"].toObject();
-            instance["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            instance["id"] = pendingInstance.isEmpty()?QUuid::createUuid().toString(QUuid::WithoutBraces):pendingInstance["id"].toString();
             instance["schemaVersion"] = 1;
             instance["group"] = "Modpacks";
             instance["icon"] = "◇";
             instance["settings"] = QJsonObject{};
+            const QUrl icon(pendingInstance["iconUrl"].toString());
+            if(icon.scheme()=="https"&&icon.userInfo().isEmpty()&&(icon.host()=="cdn.modrinth.com"||icon.host().endsWith(".forgecdn.net")))instance["sourceIconUrl"]=icon.toString();
+            if(pendingInstance.isEmpty())pendingInstance={{"id",instance["id"]},{"name",instance["name"]},{"version",instance["version"]},{"loader",instance["loader"]},{"group","Installing"}};
         }
         auto base = root, key = curseKey();
         setInstallError({});
         task(
-            plan["title"].toString(),
+            newInstance?"Installing "+instance["name"].toString():plan["title"].toString(),
             [=](Context context) {
                 const auto dir = safePath(base + "/instances", instance["id"].toString());
                 try {
@@ -1328,6 +1364,7 @@ void Launcher::applyPlan() {
                 return instance;
             },
             [this, newInstance, plan](QJsonObject instance) {
+                pendingInstance={};
                 dismissPlan();
                 reloadInstances();
                 selectInstance(instance["id"].toString());
@@ -1349,7 +1386,10 @@ void Launcher::applyPlan() {
     }
 }
 void Launcher::importPack(const QString &url,bool prepareGame) {
+    if(working)return;
     const auto base=root,key=curseKey(),path=localPath(url);
+    pendingInstance={{"id",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"name",QFileInfo(path).completeBaseName()},
+                     {"iconUrl","qrc:/qt/qml/Moly/assets/moly.svg"},{"version","Reading pack…"},{"loader","Setup"},{"group","Importing"}};
     task("Reading modpack",[=](Context context){
         bool portable=QFileInfo(path).suffix().compare("mlypack",Qt::CaseInsensitive)==0;
         if(!portable&&QFileInfo(path).suffix().compare("zip",Qt::CaseInsensitive)==0){
@@ -1358,67 +1398,69 @@ void Launcher::importPack(const QString &url,bool prepareGame) {
         if(portable)return QJsonObject{{"portableInstance",PackExport::importMoly(base,path,context)}};
         return Content(base,key,context).pack(path);
     },[this,prepareGame](QJsonObject result){
+        pendingInstance={};
         if(result.contains("portableInstance")){
             reloadInstances();selectInstance(result["portableInstance"].toObject()["id"].toString());emit navigate("instance");
             emit notice(prepareGame?"Imported your setup. Preparing Minecraft and Java…":"Imported your setup. Install game files to prepare Minecraft and Java.",false);
             if(prepareGame){const auto id=selection;QTimer::singleShot(0,this,[this,id]{if(!working&&selection==id)installSelected();});}
         }else enrichReview(result);
-    },{},"import");
+    },pendingInstance["id"].toString(),"import");
+}
+void Launcher::scanLocalInstances(const QString &provider,const QString &folder) {
+    ++localScanGeneration;localScanCancelled=true;localCandidates={};localScanError.clear();localScanBusy=true;
+    localScanProvider=provider;localScanRoots=folder.isEmpty()?InstanceImport::defaultRoots(provider):QStringList{localPath(folder)};
+    emit importScanChanged();
+    if(localScanWatcher.isRunning())localScanPending=true;else startLocalScan();
+}
+void Launcher::startLocalScan() {
+    localScanPending=false;localScanCancelled=false;
+    const auto generation=localScanGeneration;const auto provider=localScanProvider;const auto roots=localScanRoots;
+    localScanWatcher.disconnect(this);
+    connect(&localScanWatcher,&QFutureWatcher<QJsonObject>::finished,this,[this,generation]{
+        if(generation!=localScanGeneration){if(localScanPending)startLocalScan();return;}
+        const auto result=localScanWatcher.result();localCandidates=result["candidates"].toArray();localScanError=result["error"].toString();localScanBusy=false;emit importScanChanged();
+    });
+    localScanWatcher.setFuture(QtConcurrent::run([this,provider,roots]{
+        try{return QJsonObject{{"candidates",InstanceImport::scan(provider,roots,Context{&localScanCancelled})}};}
+        catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}
+        catch(...){return QJsonObject{{"error","Could not scan these folders. Choose the launcher data folder manually."}};}
+    }));
+}
+void Launcher::importLocalInstance(const QString &candidateId,const QVariantMap &overrides,bool worlds) {
+    if(working)return;
+    QJsonObject candidate;
+    for(auto value:localCandidates)if(value.toObject()["id"]==candidateId)candidate=value.toObject();
+    if(candidate.isEmpty()){emit notice("Scan again and select an instance to import.",true);return;}
+    for(const auto &key:QStringList{"version","loader","loaderVersion"})if(overrides.contains(key))candidate[key]=QJsonValue::fromVariant(overrides[key]);
+    const auto id=QUuid::createUuid().toString(QUuid::WithoutBraces),base=root;
+    pendingInstance={{"id",id},{"name",candidate["name"]},{"version",candidate["version"]},{"loader",candidate["loader"]},{"iconUrl",candidate["iconUrl"]},{"group","Importing"}};
+    task("Importing "+candidate["name"].toString(),[=](Context context){return InstanceImport::copy(base,candidate,id,worlds,context);},[this](QJsonObject instance){
+        pendingInstance={};reloadInstances();selectInstance(instance["id"].toString());emit notice("Setup copied. Preparing Minecraft and Java…",false);
+        const auto id=selection;QTimer::singleShot(0,this,[this,id]{if(!working&&selection==id)installSelected();});
+    },id,"local-import");
 }
 void Launcher::importPrism(const QString &url) {
-    auto base = root, from = localPath(url);
-    task(
-        "Copying Prism instance",
-        [=](Context c) {
-            auto pack = readObject(from + "/mmc-pack.json");
-            QJsonObject i{{"schemaVersion", 1},  {"id", QUuid::createUuid().toString(QUuid::WithoutBraces)},
-                          {"loader", "Vanilla"}, {"group", "Imported"},
-                          {"icon", "◇"},         {"settings", QJsonObject{}}};
-            QSettings cfg(from + "/instance.cfg", QSettings::IniFormat);
-            i["name"] = cfg.value("name", QFileInfo(from).fileName()).toString();
-            for (auto v : pack["components"].toArray()) {
-                auto comp = v.toObject();
-                auto uid = comp["uid"].toString();
-                if (uid == "net.minecraft")
-                    i["version"] = comp["version"];
-                else if (uid == "net.fabricmc.fabric-loader") {
-                    i["loader"] = "Fabric";
-                    i["loaderVersion"] = comp["version"];
-                } else if (uid == "org.quiltmc.quilt-loader") {
-                    i["loader"] = "Quilt";
-                    i["loaderVersion"] = comp["version"];
-                } else if (uid == "net.minecraftforge") {
-                    i["loader"] = "Forge";
-                    i["loaderVersion"] = comp["version"];
-                } else if (uid == "net.neoforged") {
-                    i["loader"] = "NeoForge";
-                    i["loaderVersion"] = comp["version"];
-                } else if (!QStringList{"org.lwjgl", "org.lwjgl3", "net.fabricmc.intermediary"}.contains(uid))
-                    throw Error("Unsupported Prism component: " + uid +
-                                ". The original instance was not changed.");
-            }
-            if (i["version"].toString().isEmpty() || QDir(from + "/patches").exists())
-                throw Error("This Prism instance has custom components or missing metadata. It cannot be "
-                            "safely imported.");
-            QString source = QDir(from + "/.minecraft").exists() ? from + "/.minecraft" : from + "/minecraft";
-            if (!QDir(source).exists())
-                throw Error("Select a Prism instance folder containing mmc-pack.json and .minecraft.");
-            auto dest = safePath(base + "/instances", i["id"].toString());
-            try {
-                copyTree(source, dest + "/game", c);
-                writeObject(dest + "/instance.json", i);
-            } catch (...) {
-                QDir(dest).removeRecursively();
-                throw;
-            }
-            return i;
-        },
-        [this](QJsonObject i) {
-            reloadInstances();
-            selectInstance(i["id"].toString());
-            emit navigate("instance");
-            emit notice("Prism instance copied. Use Install to prepare its launch files.", false);
-        });
+    // Legacy entry point uses the same safe importer as the source chooser.
+    try {const auto candidate=InstanceImport::describe("Prism",localPath(url));localCandidates=QJsonArray{candidate};importLocalInstance(candidate["id"].toString(),{});}
+    catch(const std::exception &e){emit notice(QString::fromUtf8(e.what()),true);}
+}
+void Launcher::moveInstance(const QString &id,const QString &beforeId,bool after) {
+    if(id==beforeId)return;
+    QStringList order;for(const auto &instance:instanceList)order.append(instance["id"].toString());
+    if(!order.contains(id)||(!beforeId.isEmpty()&&!order.contains(beforeId)))return;
+    order.removeAll(id);const auto index=beforeId.isEmpty()?order.size():order.indexOf(beforeId)+(after?1:0);order.insert(index,id);
+    const auto previous=config;
+    config["instanceOrder"]=QJsonArray::fromStringList(order);config["librarySort"]="manual";
+    try {
+        writeObject(root+"/settings.json",config);
+        QList<QJsonObject> sorted;
+        for(const auto &orderedId:order)for(const auto &instance:instanceList)if(instance["id"]==orderedId){sorted.append(instance);break;}
+        instanceList=sorted;emit changed();
+    }catch(const std::exception &e){config=previous;emit notice(QString::fromUtf8(e.what()),true);}
+}
+void Launcher::registerPackFiles() {
+    try{registerMolyPackFiles(QCoreApplication::applicationFilePath());emit notice("Windows now recognizes .mlypack files with Moly's icon.",false);}
+    catch(const std::exception &e){emit notice(QString::fromUtf8(e.what()),true);}
 }
 QVariantList Launcher::contentFiles(const QString &type) const {
     try {

@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
@@ -88,7 +88,10 @@ ApplicationWindow {
     function chooseFolder(action) { folderAction = action; folderDialog.open() }
     function confirm(action, title, message, value) { confirmAction=action; confirmValue=value || ""; confirmDialog.title=title; confirmText.text=message; confirmDialog.open() }
     function create() { createDialog.open() }
+    function importInstances() { localImport.open() }
+    function requestPackImport(path) { window.showNormal();window.raise();window.requestActivate();confirm("importPack","Import this Moly setup?","Moly will copy this pack into a new instance and prepare its game files.\n"+path,path) }
     function openTaskCenter() { downloadPanel.open() }
+    function showPendingInstance() {if(launcher.pendingPlan.title&&!launcher.busy)installModal.openReview();else downloadPanel.open()}
     Shortcut { sequence: "F11"; onActivated: window.visibility === Window.FullScreen ? window.showNormal() : window.showFullScreen() }
     Shortcut { sequence: "Ctrl+N"; onActivated: create() }
     Shortcut { sequence: "Alt+Left"; enabled:page==="instance"; onActivated:navigate("library") }
@@ -98,14 +101,14 @@ ApplicationWindow {
             confirm("quit", "Close Moly?", "A task or game is still running. Closing Moly will cancel its tasks and stop games it launched. Save and close Minecraft first to protect unsaved progress.")
         }
     }
-    Component.onCompleted: if (launcher.settings.launcherFullscreen) showFullScreen()
+    Component.onCompleted: {page=launcher.settings.startupPage||"library";if(launcher.settings.launcherFullscreen)showFullScreen()}
     ColumnLayout {
         anchors.fill:parent
         spacing:0
         RowLayout {
             Layout.fillWidth:true;Layout.fillHeight:true;spacing:0
             Rectangle {
-                visible:launcher.settings.showInstanceRail!==false;Layout.preferredWidth:200;Layout.fillHeight:true;color:Theme.sidebar
+                visible:launcher.settings.showInstanceRail!==false;Layout.preferredWidth:launcher.settings.sidebarWidth||200;Layout.fillHeight:true;color:Theme.sidebar
                 Rectangle {anchors.right:parent.right;width:1;height:parent.height;color:Theme.border}
                 ColumnLayout {
                     anchors.fill:parent;anchors.margins:14;spacing:12
@@ -128,19 +131,22 @@ ApplicationWindow {
                             required property var modelData
                             width:ListView.view.width;height:100;padding:0
                             Accessible.name:modelData.name
-                            onClicked:{launcher.selectInstance(modelData.id);window.page="instance"}
+                            onClicked:{if(modelData._pending)window.showPendingInstance();else{launcher.selectInstance(modelData.id);window.page="instance"}}
                             background:Rectangle {
                                 radius:17
-                                color:window.page==="instance"&&launcher.selectedId===instanceTile.modelData.id?Theme.accentSoft:instanceTile.hovered?Theme.surface2:Theme.surface
+                                color:instanceTile.modelData.installing?Theme.app:window.page==="instance"&&launcher.selectedId===instanceTile.modelData.id?Theme.accentSoft:instanceTile.hovered?Theme.surface2:Theme.surface
                                 border.color:instanceTile.activeFocus?Theme.accent:Theme.border
                                 border.width:instanceTile.activeFocus?2:1
-                                ArtworkView {anchors.fill:parent;radius:17;source:instanceTile.modelData.backgroundUrl||"";shade:launcher.settings.backgroundDim===undefined?0.5:launcher.settings.backgroundDim;animated:Theme.motion&&launcher.settings.animateArtwork!==false}
+                                ArtworkView {anchors.fill:parent;radius:17;source:instanceTile.modelData.backgroundUrl||"";opacity:instanceTile.modelData.installing?0.4:1;shade:launcher.settings.backgroundDim===undefined?0.5:launcher.settings.backgroundDim;animated:Theme.motion&&launcher.settings.animateArtwork!==false}
                                 Behavior on color {ColorAnimation{duration:Theme.motion?160:0}}
                             }
+                            DropArea { anchors.fill:parent;keys:["moly-instance"];onDropped:function(drop){if(drop.source&&drop.source.instanceId!==instanceTile.modelData.id&&!instanceTile.modelData._pending){const id=drop.source.instanceId,target=instanceTile.modelData.id,after=drop.y>height/2;Qt.callLater(function(){launcher.moveInstance(id,target,after)});drop.acceptProposedAction()}};Rectangle {visible:parent.containsDrag;anchors.top:parent.top;width:parent.width;height:3;radius:2;color:Theme.accent} }
                             contentItem:Item {
-                                InstanceAvatar {width:34;height:34;anchors.horizontalCenter:parent.horizontalCenter;anchors.top:parent.top;anchors.topMargin:12;imageSource:instanceTile.modelData.iconUrl||""}
+                                InstanceAvatar {width:34;height:34;anchors.horizontalCenter:parent.horizontalCenter;anchors.top:parent.top;anchors.topMargin:12;imageSource:instanceTile.modelData.iconUrl||"";opacity:instanceTile.modelData.installing?0.45:1}
                                 Text {anchors.left:parent.left;anchors.right:parent.right;anchors.leftMargin:10;anchors.rightMargin:10;y:53;height:20;text:instanceTile.modelData.name;color:Theme.text;font.family:Theme.fontFamily;font.pixelSize:12;font.weight:Font.DemiBold;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter;elide:Text.ElideRight}
-                                Text {anchors.left:parent.left;anchors.right:parent.right;anchors.leftMargin:10;anchors.rightMargin:10;y:76;height:14;text:instanceTile.modelData.running?"Running":instanceTile.modelData.loader+" · "+instanceTile.modelData.version;color:instanceTile.modelData.running?Theme.success:Theme.textMuted;font.pixelSize:10;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter;elide:Text.ElideRight}
+                                ArcSpinner { visible:instanceTile.modelData.installing;width:18;height:18;anchors.horizontalCenter:parent.horizontalCenter;y:20 }
+                                ReorderHandle { instanceId:instanceTile.modelData.id;available:!instanceTile.modelData._pending;width:20;height:26;x:parent.width-23;y:5 }
+                                Text {anchors.left:parent.left;anchors.right:parent.right;anchors.leftMargin:10;anchors.rightMargin:10;y:76;height:14;text:instanceTile.modelData.installing?("Installing"+(launcher.progress>=0&&launcher.taskInstanceId===instanceTile.modelData.id?" · "+Math.round(launcher.progress*100)+"%":"…")):instanceTile.modelData._pending?instanceTile.modelData.status:instanceTile.modelData.running?"Running":instanceTile.modelData.loader+" · "+instanceTile.modelData.version;color:instanceTile.modelData.running?Theme.success:Theme.textMuted;font.pixelSize:10;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter;elide:Text.ElideRight}
                             }
                         }
                         ScrollBar.vertical:ScrollBar{}
@@ -165,7 +171,7 @@ ApplicationWindow {
         Item {
             Layout.fillWidth:true;Layout.preferredHeight:80
             Rectangle {anchors.top:parent.top;height:1;width:parent.width;color:Theme.border}
-            TaskActivity { id: taskActivity; anchors.left:parent.left;anchors.leftMargin:14;anchors.verticalCenter:parent.verticalCenter; maximumWidth:Math.max(80,mainDock.x-24);onClicked:downloadPanel.visible?downloadPanel.close():downloadPanel.open() }
+            TaskActivity { id: taskActivity; anchors.right:parent.right;anchors.rightMargin:14;anchors.verticalCenter:parent.verticalCenter; maximumWidth:Math.max(94,parent.width-mainDock.x-mainDock.width-28);onClicked:downloadPanel.visible?downloadPanel.close():downloadPanel.open() }
             TabStrip {
                 id:mainDock
                 anchors.centerIn:parent;height:52;width:implicitWidth
@@ -195,7 +201,7 @@ ApplicationWindow {
             Text{id:toastText;Layout.fillWidth:true;color:Theme.text;font.family:Theme.fontFamily;font.pixelSize:12;wrapMode:Text.Wrap;verticalAlignment:Text.AlignVCenter;Layout.alignment:Qt.AlignVCenter}
             MButton{iconName:"close";kind:"ghost";compact:true;onClicked:toast.dismiss();Accessible.name:"Dismiss notification"}
         }
-        Timer{id:toastTimer;interval:6000;onTriggered:toast.dismiss()}
+        Timer{id:toastTimer;interval:(launcher.settings.toastSeconds||6)*1000;onTriggered:toast.dismiss()}
     }
     Connections {
         target:launcher
@@ -203,11 +209,12 @@ ApplicationWindow {
         function onChanged(){if(window.page==="instance")playTargets.selectedInstanceId=launcher.selectedId}
         function onNotice(message,error){toast.show(message,error)}
         function onPlanChanged(){if(launcher.pendingPlan.title&&!launcher.installAutomatic&&!installModal.visible)installModal.openReview()}
-        function onGameStarted(){window.pendingGameLogs=true;window.navigate("instance");Qt.callLater(window.focusGameLogs);if(launcher.selected.settings&&launcher.selected.settings.keepVisible!==undefined?!launcher.selected.settings.keepVisible:!launcher.settings.keepVisible)window.showMinimized()}
+        function onGameStarted(){if(launcher.settings.openLogsOnLaunch!==false){window.pendingGameLogs=true;window.navigate("instance");Qt.callLater(window.focusGameLogs);}if(launcher.selected.settings&&launcher.selected.settings.keepVisible!==undefined?!launcher.selected.settings.keepVisible:!launcher.settings.keepVisible)window.showMinimized()}
         function onGameEnded(){if(window.visibility===Window.Minimized)window.showNormal()}
     }
     DownloadManager {id:downloadPanel;shell:window}
     InstallDialog{id:installModal;shell:window}
+    ImportInstancesDialog{id:localImport;shell:window}
     FileDialog {
         id:fileDialog
         onAccepted:{
@@ -227,7 +234,7 @@ ApplicationWindow {
             else launcher.importFile(path,contentType)
         }
     }
-    FolderDialog{id:folderDialog;onAccepted:folderAction==="prism"?launcher.importPrism(selectedFolder.toString()):launcher.relocate(selectedFolder.toString())}
+    FolderDialog{id:folderDialog;onAccepted:folderAction==="localImport"?localImport.scanFolder(selectedFolder.toString()):launcher.relocate(selectedFolder.toString())}
     CreateInstanceDialog {id:createDialog;shell:window}
     LiquidDialog {
         id:confirmDialog;anchors.centerIn:parent;width:480;modal:true;padding:24;closePolicy:Popup.CloseOnEscape
@@ -235,7 +242,7 @@ ApplicationWindow {
             Text{id:confirmText;Layout.fillWidth:true;wrapMode:Text.Wrap;color:Theme.textSecondary;font.pixelSize:13}
             RowLayout{Layout.alignment:Qt.AlignRight;spacing:8
                 MButton{text:"Cancel";onClicked:confirmDialog.close()}
-                MButton{text:"Confirm";kind:"danger";onClicked:{confirmDialog.close();if(confirmAction==="delete")launcher.deleteInstance();else if(confirmAction==="restore")launcher.restoreBackup(confirmValue);else if(confirmAction==="account")launcher.removeAccount(confirmValue);else if(confirmAction==="stop")launcher.stopGame();else if(confirmAction==="quit"){forceQuit=true;Qt.quit()}}}
+                MButton{text:confirmAction==="importPack"&&launcher.busy?"Wait for current task":"Confirm";enabled:confirmAction!=="importPack"||!launcher.busy;kind:confirmAction==="importPack"?"primary":"danger";onClicked:{confirmDialog.close();if(confirmAction==="importPack")launcher.importPack(confirmValue);else if(confirmAction==="play")launcher.play();else if(confirmAction==="delete")launcher.deleteInstance();else if(confirmAction==="restore")launcher.restoreBackup(confirmValue);else if(confirmAction==="account")launcher.removeAccount(confirmValue);else if(confirmAction==="stop")launcher.stopGame();else if(confirmAction==="quit"){forceQuit=true;Qt.quit()}}}
             }
         }
     }

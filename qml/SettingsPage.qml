@@ -51,7 +51,7 @@ Item {
                         RowLayout{Layout.fillWidth:true;spacing:14
                             RowLayout{spacing:9
                                 Text{text:"Reduce motion";color:Theme.text;font.pixelSize:12}
-                                MSwitch{id:motion;objectName:"reduceMotionSwitch";checked:launcher.settings.reducedMotion;Accessible.name:"Reduce motion";onToggled:launcher.setReducedMotion(checked)}
+                                MSwitch{id:motion;objectName:"reduceMotionSwitch";checked:launcher.settings.reducedMotion===true;Accessible.name:"Reduce motion";onToggled:launcher.setReducedMotion(checked)}
                             }
                             RowLayout{spacing:9
                                 Text{text:"Open launcher fullscreen";color:Theme.text;font.pixelSize:12}
@@ -80,7 +80,9 @@ Item {
                                     { key: "serverPing", label: "Check saved server status" },
                                     { key: "showInstanceRail", label: "Show instance sidebar" },
                                     { key: "showModCounts", label: "Show mod counts in Library" },
-                                    { key: "showCompletedTasks", label: "Show completed tasks" }
+                                    { key: "showCompletedTasks", label: "Show completed tasks" },
+                                    { key: "showQuickAccessRefresh", label: "Show worlds and servers refresh" },
+                                    { key: "openLogsOnLaunch", label: "Show logs when Minecraft starts" }
                                 ]
                                 delegate: RowLayout {
                                     required property var modelData
@@ -158,6 +160,16 @@ Item {
                         Text { text: "Higher values darken instance backgrounds to keep text readable."; color: Theme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.Wrap }
                     }
                 }
+                Panel {visible:page.section===0;Layout.fillWidth:true
+                    contentItem:ColumnLayout {spacing:14
+                        Text {text:"Make room for your setup";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
+                        RowLayout {Layout.fillWidth:true;Text {text:"Instance sidebar width";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}Text {text:Math.round(railWidth.value)+" px";color:Theme.textMuted;font.pixelSize:12}}
+                        MSlider {id:railWidth;Layout.fillWidth:true;from:160;to:260;stepSize:10;value:launcher.settings.sidebarWidth||200;onMoved:launcher.setUiPreferences({sidebarWidth:Math.round(value)})}
+                        RowLayout {Layout.fillWidth:true;Text {text:"Worlds and servers shown in Library";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}MSpinBox {from:1;to:8;value:launcher.settings.quickAccessRows||3;onValueModified:launcher.setUiPreferences({quickAccessRows:value})}}
+                        RowLayout {Layout.fillWidth:true;Text {text:"Open Moly on";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}MComboBox {Layout.preferredWidth:180;model:["Library","Discover","Wardrobe"];currentIndex:Math.max(0,["library","discover","skins"].indexOf(launcher.settings.startupPage||"library"));onActivated:launcher.setUiPreferences({startupPage:["library","discover","skins"][currentIndex]})}}
+                        RowLayout {Layout.fillWidth:true;Text {text:"Notification duration";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}MSpinBox {from:2;to:15;value:launcher.settings.toastSeconds||6;onValueModified:launcher.setUiPreferences({toastSeconds:value})}Text {text:"seconds";color:Theme.textMuted;font.pixelSize:12}}
+                    }
+                }
                 Panel{visible:page.section===1;Layout.fillWidth:true
                     ColumnLayout{anchors.fill:parent;spacing:12
                         Text{text:"Minecraft defaults";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
@@ -205,6 +217,8 @@ Item {
                     ColumnLayout{anchors.fill:parent;spacing:12
                         Text{text:"Storage";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
                         RowLayout{Layout.fillWidth:true;Text{text:launcher.dataRoot;color:Theme.textSecondary;font.pixelSize:12;elide:Text.ElideMiddle;Layout.fillWidth:true}MButton{text:"Move storage";iconName:"folder";enabled:!launcher.busy;onClicked:shell.chooseFolder("storage")}}
+                        RowLayout {Layout.fillWidth:true;Text {text:"Moly pack files";color:Theme.text;font.pixelSize:13;Layout.fillWidth:true}MButton {text:"Use Moly for .mlypack";iconName:"file";onClicked:launcher.registerPackFiles()}}
+                        Text {text:"Adds Moly's icon in Explorer and lets you double-click a pack to import it. Applies to your Windows user.";color:Theme.textMuted;font.pixelSize:11;wrapMode:Text.Wrap;Layout.fillWidth:true}
                         Text{text:"Copies files to a new location. Restart Moly afterwards, then repair instances to refresh their paths.";color:Theme.textMuted;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
                     }
                 }

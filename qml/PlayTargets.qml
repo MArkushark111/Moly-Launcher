@@ -9,6 +9,7 @@ ColumnLayout {
     property bool checkingStatus: false
     property bool showInstanceName: true
     property bool showTitle: true
+    property bool showRefresh: launcher.settings.showQuickAccessRefresh!==false
     property string title: "Jump in"
     property int maximumRows: 5
     property bool allowWorldIconChanges: true
@@ -23,7 +24,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Text { text: panel.title; color: Theme.text; font.pixelSize: 17; font.weight: Font.DemiBold; Layout.fillWidth: true; textFormat: Text.PlainText }
         Text { visible: panel.checkingStatus; text: "Checking servers…"; color: Theme.textMuted; font.pixelSize: 11 }
-        MButton { text: "Refresh"; iconName: "refresh"; kind: "ghost"; compact: true; enabled: !panel.loading; onClicked: panel.refreshRequested() }
+        MButton { visible:panel.showRefresh;text: "Refresh"; iconName: "refresh"; kind: "ghost"; compact: true; enabled: !panel.loading; onClicked: panel.refreshRequested() }
     }
     Repeater {
         model: panel.visibleItems
@@ -44,8 +45,8 @@ ColumnLayout {
                 Rectangle {
                     Layout.preferredWidth: 48; Layout.preferredHeight: 48
                     radius: 11; color: Theme.surface2
-                    Image { id: targetIcon; anchors.fill: parent; anchors.margins: 3; source: targetRow.modelData.iconUrl || ""; asynchronous: true; sourceSize.width: 96; sourceSize.height: 96; fillMode: Image.PreserveAspectFit; visible: status === Image.Ready }
-                    Icon { anchors.centerIn: parent; name: targetRow.modelData.type === "world" ? "world" : "servers"; size: 23; visible: targetIcon.status !== Image.Ready }
+                    ArtworkView { anchors.fill:parent;radius:11;shade:0;source:targetRow.modelData.iconUrl||"";animated:false }
+                    Icon { anchors.centerIn: parent; name: targetRow.modelData.type === "world" ? "world" : "servers"; size: 23; visible: !targetRow.modelData.iconUrl }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true; spacing: 4
@@ -73,7 +74,7 @@ ColumnLayout {
                     }
                     Text { text: targetRow.modelData.status === "online" ? targetRow.modelData.onlinePlayers + " / " + targetRow.modelData.maxPlayers + " online" : ""; color: Theme.textMuted; font.pixelSize: 10; textFormat: Text.PlainText }
                 }
-                MButton { visible: panel.allowWorldIconChanges && targetRow.modelData.type === "world"; text: ""; iconName: "file"; kind: "ghost"; compact: true; enabled: panel.actionsEnabled; Accessible.name: "Change world icon for " + targetRow.modelData.name; onClicked: panel.changeWorldIcon(targetRow.modelData) }
+                MButton { visible: panel.allowWorldIconChanges && targetRow.modelData.type === "world"; text: ""; iconName: "file"; kind: "secondary"; compact: true; background:Rectangle {radius:10;color:rowHover.hovered?Theme.app:Theme.surface;border.color:Theme.border;Behavior on color {ColorAnimation {duration:Theme.motion?160:0}}} enabled: panel.actionsEnabled; Accessible.name: "Change world icon for " + targetRow.modelData.name; onClicked: panel.changeWorldIcon(targetRow.modelData) }
                 MButton { text: targetRow.modelData.type === "server" ? "Join" : "Play"; iconName: "play"; compact: true; kind: "primary"; enabled: panel.actionsEnabled; onClicked: panel.activated(targetRow.modelData); Accessible.name: (targetRow.modelData.type === "server" ? "Join " : "Play ") + targetRow.modelData.name }
             }
         }

@@ -164,7 +164,7 @@ For headless rendering, use Qt's installed offscreen platform plugin and softwar
 - The opt-in `confirm_integration` helper uses a fresh temporary directory and real Modrinth metadata. Pack and mod version selection creates no jobs, archive downloads, staging, or game payloads. One explicit confirmation resolves dependencies, commits content, and checks installed hashes.
 - `--verify-confirm-ui` changes the actual version dropdown and clicks the visible confirmation button in isolated storage. Selection stays idle; one click installs without a second modal.
 - Updated `--verify-task-ui` completes two real exports, observes compact activity, verifies the full panel stays closed, and opens history manually. Actual reduced-motion and mod-switch checks pass.
-- Rendered and inspected 1024 × 640 Library, settings tabs, per-instance overrides, creation chooser, rounded instance menu, provider dropdown with both logos, and compact pack confirmation. Source previews use isolated fixture data.
+- Rendered and inspected 1024 Ã— 640 Library, settings tabs, per-instance overrides, creation chooser, rounded instance menu, provider dropdown with both logos, and compact pack confirmation. Source previews use isolated fixture data.
 - The portable package is deployed with Qt and tested with a minimal system PATH. No new live Microsoft login/skin upload, game launch, or separate clean-machine test is claimed by this UI release.
 
 ```powershell
@@ -174,3 +174,20 @@ For headless rendering, use Qt's installed offscreen platform plugin and softwar
 ```
 
 The confirm UI check needs an empty compatible Fabric 1.20.1 instance; do not run live install checks against everyday instances.
+
+## 0.5.0 verification
+
+- Seven automated suites pass. Local-import cases cover Prism/MultiMC, CurseForge, ATLauncher, the current Modrinth SQLite schema, exact file copying, disabled mods, optional worlds, cancellation cleanup, self-import rejection, and leaving source game files/database hashes unchanged. Launcher-order persistence is tested separately.
+- The actual drag-handle UI check moves an instance, verifies saved custom order, and restores the fixture order. Motion and installed-mod switch checks pass after the startup-page correction. The task UI check confirms manual-only opening.
+- A real Modrinth search/preparation displayed Fabulously Optimized with its real project icon and dimmed pending cards in the rail and Library. The captured footer pill is anchored right and expands left. Cancelling the check did not create a ready instance.
+- Read-only local discovery found the Modrinth profiles installed on this PC. No actual user instance was copied or changed during verification. Format import tests use temporary fixture data; this is not a claim that every historical launcher schema or proprietary client feature is supported.
+- A second process forwarded a local .mlypack opening request to the first Moly window. The existing window displayed an import confirmation; no instance was copied before confirming.
+- The Windows association is registered for this user against the packaged 0.5.0 executable; its Explorer ProgID, icon path, and quoted opening command were checked. The installer recipe has matching association entries; an Inno Setup installer was not compiled here.
+- Inspected the importer and populated modpack chooser at 1024 x 640. The portable build is checked with a minimal system PATH. No new live Microsoft account sign-in, full Minecraft game session, or separate clean-machine test is claimed.
+
+```powershell
+.\build-release\MolyLauncher.exe --data-dir .\test-data\ui-050 --verify-reorder-ui
+.\build-release\MolyLauncher.exe --data-dir .\test-data\pending-pack-050 --verify-pack-ui .\docs\screenshots\installing-050.png
+```
+
+The pack-preparation check requires empty isolated storage, contacts Modrinth, and cancels its real preparation after capturing the UI. Never run these helpers against ordinary user storage.

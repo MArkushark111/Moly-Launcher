@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.4.0 — Confirm, then play
+## 0.5.0 - Bring your setups along
+
+- Move Tasks to the bottom right; expand it left during work, retain the native arc spinner, and remove its tooltip.
+- Add local instance discovery/import for Modrinth databases, Prism/MultiMC, CurseForge, ATLauncher, and ordinary Minecraft/Lunar game folders. Show version corrections and client-only feature limits before copying.
+- Copy game data into separate instances with optional worlds, cancellation cleanup, and no launcher accounts, tokens, or external commands.
+- Show pending pack/import instances with their title, icon, dimmed artwork, and installing indicator before files are ready.
+- Drag instance handles in the rail, list, or grid to save a custom order; support Alt+Up/Down on focused handles.
+- Add useful modpack search starting points, more appearance/startup/log/notification settings, stable world-icon hover, and clipped rounded world/server pictures.
+- Register .mlypack Explorer icons and opening commands through the installer or Settings. Forward pack-open requests to an existing Moly window and require confirmation.
+
+## 0.4.0 â€” Confirm, then play
 
 - Load version metadata without preparing downloads; start dependency resolution and installation after one confirmation. Pause for restricted downloads and locally modified replacements.
 - Keep the task center manual. Expand a compact footer activity button horizontally with a native rotating arc, current-step progress, and measured transfer speed.

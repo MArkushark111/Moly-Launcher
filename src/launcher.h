@@ -49,6 +49,9 @@ class Launcher : public QObject {
     Q_PROPERTY(QVariantList installVersions READ installVersions NOTIFY installStateChanged)
     Q_PROPERTY(bool loadingInstallChoices READ loadingInstallChoices NOTIFY installStateChanged)
     Q_PROPERTY(bool installAutomatic READ installAutomatic NOTIFY installStateChanged)
+    Q_PROPERTY(QVariantList importCandidates READ importCandidates NOTIFY importScanChanged)
+    Q_PROPERTY(bool importScanning READ importScanning NOTIFY importScanChanged)
+    Q_PROPERTY(QString importScanError READ importScanError NOTIFY importScanChanged)
   public:
     explicit Launcher(QString root, QObject *parent = nullptr);
     ~Launcher() override;
@@ -138,6 +141,13 @@ class Launcher : public QObject {
     }
     bool loadingInstallChoices() const { return choicesLoading; }
     bool installAutomatic() const { return automaticInstall; }
+    QVariantList importCandidates() const { return localCandidates.toVariantList(); }
+    bool importScanning() const { return localScanBusy; }
+    QString importScanError() const { return localScanError; }
+    Q_INVOKABLE void scanLocalInstances(const QString &provider, const QString &folder = {});
+    Q_INVOKABLE void importLocalInstance(const QString &candidateId, const QVariantMap &overrides, bool includeWorlds = true);
+    Q_INVOKABLE void moveInstance(const QString &id, const QString &beforeId, bool after = false);
+    Q_INVOKABLE void registerPackFiles();
     Q_INVOKABLE void loadInstallChoices(const QVariantMap &project, const QString &instanceId = QString());
     Q_INVOKABLE void selectInstance(const QString &id);
     Q_INVOKABLE void refreshVersions(bool snapshots = false);
@@ -216,12 +226,22 @@ class Launcher : public QObject {
     void installStateChanged();
     void installFailed(QString message);
     void installCompleted(QString message);
+    void importScanChanged();
 
   private:
     QString root, selection, statusText = "Ready when you are", deviceCode, installErrorText;
     QString activeTaskInstanceId, activeTaskOperation;
     QString retryInstanceId, retryOperation;
     QJsonObject config, review;
+    QJsonObject pendingInstance;
+    QFutureWatcher<QJsonObject> localScanWatcher;
+    std::atomic_bool localScanCancelled = false;
+    QJsonArray localCandidates;
+    QString localScanError, localScanProvider;
+    QStringList localScanRoots;
+    quint64 localScanGeneration = 0;
+    bool localScanBusy = false, localScanPending = false;
+    void startLocalScan();
     QJsonArray accountList, versionList, searchResults, installVersionList;
     QString searchProvider, searchType, searchQuery, searchCategory, searchErrorText;
     QJsonObject searchInstance;

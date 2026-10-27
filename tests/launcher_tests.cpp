@@ -57,6 +57,16 @@ class LauncherTests : public QObject {
         QVERIFY(!launcher.installError().isEmpty());
         QVERIFY(!QFileInfo::exists(storage.path()+"/cache"));
     }
+    void manualInstanceOrderPersists() {
+        QTemporaryDir storage;makeInstance(storage.path(),"alpha");makeInstance(storage.path(),"bravo");makeInstance(storage.path(),"charlie");
+        Launcher launcher(storage.path());
+        launcher.moveInstance("charlie","alpha");QCOMPARE(launcher.instances().first().toMap()["id"].toString(),QString("charlie"));
+        launcher.moveInstance("alpha","bravo",true);
+        Launcher reloaded(storage.path());QCOMPARE(reloaded.instances().last().toMap()["id"].toString(),QString("alpha"));
+        QCOMPARE(reloaded.settings()["librarySort"].toString(),QString("manual"));
+        const auto order=reloaded.settings()["instanceOrder"];
+        reloaded.moveInstance("missing","alpha");QCOMPARE(reloaded.settings()["instanceOrder"],order);
+    }
     void accentValidationAndPersistence() {
         QTemporaryDir storage;
         QVERIFY(storage.isValid());

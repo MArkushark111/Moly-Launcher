@@ -1,3 +1,9 @@
+#include <QMouseEvent>
+#include <QLocalServer>
+#include <QLocalSocket>
+#include <QCryptographicHash>
+#include <QJsonDocument>
+#include "fileassociation.h"
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -36,14 +42,30 @@ static void logMessage(QtMsgType, const QMessageLogContext &, const QString &mes
     if(file.open(QIODevice::WriteOnly|QIODevice::Append))file.write((moly::redact(message)+"\n").toUtf8());
 }
 int main(int argc,char *argv[]) {
-    QGuiApplication app(argc,argv); app.setOrganizationName("Moly");app.setApplicationName("Moly Launcher");app.setApplicationVersion("0.4.0");
+    QGuiApplication app(argc,argv); app.setOrganizationName("Moly");app.setApplicationName("Moly Launcher");app.setApplicationVersion("0.5.0");
     QQuickStyle::setStyle("Basic");
     QFontDatabase::addApplicationFont(":/qt/qml/Moly/assets/Inter.ttf");
     app.setWindowIcon(QIcon(":/qt/qml/Moly/assets/moly.svg"));
-    QCommandLineParser parser;parser.addHelpOption();parser.addVersionOption();parser.addOption({"data-dir","Use isolated launcher storage.","path"});parser.addOption({"screenshot","Save the window to PNG and exit (UI smoke test).","path"});parser.addOption({"page","Start on a screen for UI testing.","name"});parser.addOption({"size","Window size for UI testing (e.g. 1024x640).","size"});parser.addOption({"content-type","Discover content type for UI testing.","type"});parser.addOption({"dialog","Open a preview dialog (create, microsoft, remove, install, or pack).","name"});parser.addOption({"verify-switch","Verify the installed-mod switch in isolated storage (requires --data-dir)."});parser.addOption({"verify-motion","Verify immediate reduced-motion behavior in isolated storage (requires --data-dir)."});parser.addOption({"instance-tab","Instance section for UI testing (content, files, places, logs, share, settings).","name"});parser.addOption({"verify-task-ui","Check compact task activity and manual task-panel opening with real isolated exports (requires --data-dir)."});parser.addOption({"settings-tab","Settings section for UI testing (0-3).","index"});parser.addOption({"instance-settings-tab","Instance settings section for UI testing (0-2).","index"});parser.addOption({"verify-confirm-ui","Verify changing a version stays idle, then confirm one real mod install in isolated storage."});parser.process(app);
+    QCommandLineParser parser;parser.addHelpOption();parser.addVersionOption();parser.addOption({"data-dir","Use isolated launcher storage.","path"});parser.addOption({"screenshot","Save the window to PNG and exit (UI smoke test).","path"});parser.addOption({"page","Start on a screen for UI testing.","name"});parser.addOption({"size","Window size for UI testing (e.g. 1024x640).","size"});parser.addOption({"content-type","Discover content type for UI testing.","type"});parser.addOption({"dialog","Open a preview dialog (create, microsoft, remove, install, or pack).","name"});parser.addOption({"verify-switch","Verify the installed-mod switch in isolated storage (requires --data-dir)."});parser.addOption({"verify-motion","Verify immediate reduced-motion behavior in isolated storage (requires --data-dir)."});parser.addOption({"instance-tab","Instance section for UI testing (content, files, places, logs, share, settings).","name"});parser.addOption({"verify-task-ui","Check compact task activity and manual task-panel opening with real isolated exports (requires --data-dir)."});parser.addOption({"settings-tab","Settings section for UI testing (0-3).","index"});parser.addOption({"instance-settings-tab","Instance settings section for UI testing (0-2).","index"});parser.addOption({"verify-confirm-ui","Verify changing a version stays idle, then confirm one real mod install in isolated storage."});parser.addOption({"import-pack","Open a local pack for import.","path"});parser.addOption({"register-file-types","Register .mlypack files for this Windows user."});parser.addPositionalArgument("pack","Optional local .mlypack, .mrpack, or ZIP file.","[pack]");parser.addOption({"verify-reorder-ui","Drag the sidebar reorder handle in isolated storage."});parser.addOption({"verify-pack-ui","Capture a real pack preparation, then cancel before it is ready (isolated storage only).","path"});parser.process(app);
+    if(parser.isSet("register-file-types")) {try{moly::registerMolyPackFiles(QCoreApplication::applicationFilePath());return 0;}catch(const std::exception &e){qCritical("%s",e.what());return 1;}}
+    QString requestedPack=parser.value("import-pack");
+    if(requestedPack.isEmpty()&&!parser.positionalArguments().isEmpty())requestedPack=parser.positionalArguments().first();
+    if(!requestedPack.isEmpty()) {
+        const QFileInfo file(requestedPack);
+        if(!file.isFile()||!QStringList{"mlypack","mrpack","zip"}.contains(file.suffix().toLower())){qCritical("Choose a local .mlypack, .mrpack, or ZIP file.");return 2;}
+        requestedPack=file.absoluteFilePath();
+    }
     QString root=parser.value("data-dir");if(root.isEmpty())root=QSettings().value("dataRoot",QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)).toString();root=QDir(root).absolutePath();QDir().mkpath(root);
-    diagnosticPath=root+"/launcher-ui.log";QFile::remove(diagnosticPath);qInstallMessageHandler(logMessage);
-    QLockFile lock(root+"/launcher.lock");lock.setStaleLockTime(0);if(!lock.tryLock(100)){qCritical("Moly is already using this storage folder.");return 2;}
+    diagnosticPath=root+"/launcher-ui.log";
+    const auto serverName="MolyLauncher-"+QString::fromLatin1(QCryptographicHash::hash(root.toCaseFolded().toUtf8(),QCryptographicHash::Sha256).toHex().left(20));
+    QLockFile lock(root+"/launcher.lock");lock.setStaleLockTime(0);
+    if(!lock.tryLock(100)) {
+        QLocalSocket socket;socket.connectToServer(serverName);
+        if(socket.waitForConnected(600)) {socket.write(QJsonDocument(QJsonObject{{"pack",requestedPack}}).toJson(QJsonDocument::Compact)+'\n');socket.flush();socket.waitForBytesWritten(600);return 0;}
+        qCritical("Moly is already using this storage folder.");return 2;
+    }
+    QFile::remove(diagnosticPath);qInstallMessageHandler(logMessage);
+    QLocalServer instanceServer;instanceServer.setSocketOptions(QLocalServer::UserAccessOption);QLocalServer::removeServer(serverName);instanceServer.listen(serverName);
     try {
         Launcher launcher(root);
         moly::PlayTargets targets(root);SkinStore skins(root);
@@ -60,6 +82,29 @@ int main(int argc,char *argv[]) {
         targetRefresh.start();
         QObject::connect(&engine,&QQmlApplicationEngine::objectCreationFailed,&app,[]{QCoreApplication::exit(1);},Qt::QueuedConnection);
         engine.loadFromModule("Moly","Main");
+        auto openPack=[&engine](const QString &path) {
+            if(engine.rootObjects().isEmpty())return;
+            auto view=engine.rootObjects().first();
+            if(path.isEmpty()){if(auto window=qobject_cast<QQuickWindow*>(view)){window->showNormal();window->raise();window->requestActivate();}return;}
+            const QFileInfo file(path);
+            if(!file.isFile()||!QStringList{"mlypack","mrpack","zip"}.contains(file.suffix().toLower()))return;
+            QMetaObject::invokeMethod(view,"requestPackImport",Q_ARG(QVariant,QVariant(file.absoluteFilePath())));
+        };
+        QObject::connect(&instanceServer,&QLocalServer::newConnection,&app,[&]{
+            while(auto socket=instanceServer.nextPendingConnection()) {
+                auto buffer=std::make_shared<QByteArray>();
+                QObject::connect(socket,&QLocalSocket::readyRead,&app,[socket,buffer,openPack]{
+                    buffer->append(socket->readAll());
+                    if(buffer->size()>65536){socket->disconnectFromServer();return;}
+                    if(!buffer->contains('\n'))return;
+                    const auto message=QJsonDocument::fromJson(buffer->left(buffer->indexOf('\n'))).object();
+                    openPack(message["pack"].toString());socket->disconnectFromServer();
+                });
+                QObject::connect(socket,&QLocalSocket::disconnected,socket,&QObject::deleteLater);
+                QTimer::singleShot(3000,socket,[socket]{socket->disconnectFromServer();});
+            }
+        });
+        if(!requestedPack.isEmpty())QTimer::singleShot(350,&app,[openPack,requestedPack]{openPack(requestedPack);});
         if(!engine.rootObjects().isEmpty()){auto view=engine.rootObjects().first();if(parser.isSet("size")){auto parts=parser.value("size").split('x');if(parts.size()==2){view->setProperty("width",parts[0].toInt());view->setProperty("height",parts[1].toInt());}}if(parser.isSet("content-type"))view->setProperty("discoverType",parser.value("content-type"));}
         if(parser.isSet("page")&&!engine.rootObjects().isEmpty())engine.rootObjects().first()->setProperty("page",parser.value("page"));
         if(parser.isSet("instance-tab")&&!engine.rootObjects().isEmpty()){
@@ -100,6 +145,53 @@ int main(int argc,char *argv[]) {
                 }else if(stage==3&&!launcher.busy()&&!launcher.installAutomatic()) {
                     const bool ok=launcher.installError().isEmpty()&&!launcher.contentFiles("mod").isEmpty();
                     timer->stop();if(ok)qInfo("Confirm UI check passed: version switch stayed idle; Confirm installed content without a second modal.");else qWarning("Confirm UI install failed.");QCoreApplication::exit(ok?0:4);
+                }
+            });timer->start();
+        }
+        if(parser.isSet("verify-reorder-ui")) {
+            if(!parser.isSet("data-dir")||engine.rootObjects().isEmpty()||launcher.instances().size()<2)return 4;
+            auto timer=new QTimer(&app);timer->setInterval(100);
+            QObject::connect(timer,&QTimer::timeout,&app,[&,timer,ticks=0]()mutable{
+                if(++ticks>150){timer->stop();qWarning("Reorder UI check timed out.");QCoreApplication::exit(4);return;}
+                if(launcher.busy())return;timer->stop();
+                auto window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+                const auto order=launcher.instances();const auto first=order.first().toMap()["id"].toString(),last=order.last().toMap()["id"].toString();
+                auto startItem=qobject_cast<QQuickItem*>(findVisualObject(window->contentItem(),"reorder-"+first));
+                auto targetItem=qobject_cast<QQuickItem*>(findVisualObject(window->contentItem(),"reorder-"+last));
+                if(!startItem||!targetItem){qWarning("Reorder handles missing.");QCoreApplication::exit(4);return;}
+                const auto start=startItem->mapToScene(QPointF(12,15)),target=targetItem->mapToScene(QPointF(12,85));
+                auto mouse=[window](QEvent::Type type,QPointF point,Qt::MouseButton button,Qt::MouseButtons buttons){QMouseEvent event(type,point,window->mapToGlobal(point.toPoint()),button,buttons,Qt::NoModifier);QCoreApplication::sendEvent(window,&event);};
+                mouse(QEvent::MouseButtonPress,start,Qt::LeftButton,Qt::LeftButton);
+                QTimer::singleShot(60,&app,[mouse,start]{mouse(QEvent::MouseMove,start+QPointF(0,14),Qt::NoButton,Qt::LeftButton);});
+                QTimer::singleShot(120,&app,[mouse,target]{mouse(QEvent::MouseMove,target,Qt::NoButton,Qt::LeftButton);});
+                QTimer::singleShot(180,&app,[mouse,target]{mouse(QEvent::MouseButtonRelease,target,Qt::LeftButton,Qt::NoButton);});
+                QTimer::singleShot(450,&app,[&,order,first]{
+                    const bool ok=launcher.instances().last().toMap()["id"].toString()==first;
+                    for(auto value:order)launcher.moveInstance(value.toMap()["id"].toString(),QString());
+                    if(ok)qInfo("Reorder UI check passed: actual handle drag, persisted custom order, originals restored.");else qWarning("Reorder UI check failed.");
+                    QCoreApplication::exit(ok?0:4);
+                });
+            });timer->start();
+        }
+        if(parser.isSet("verify-pack-ui")) {
+            if(!parser.isSet("data-dir")||engine.rootObjects().isEmpty()||!launcher.instances().isEmpty())return 4;
+            auto timer=new QTimer(&app);timer->setInterval(50);
+            QObject::connect(timer,&QTimer::timeout,&app,[&,timer,stage=0,ticks=0,captured=std::make_shared<bool>(false)]()mutable{
+                if(++ticks>1600){timer->stop();launcher.cancel();qWarning("Pack UI check timed out.");QCoreApplication::exit(4);return;}
+                if(stage==0&&!launcher.busy()&&ticks>3){launcher.search("Modrinth","modpack","Fabulously Optimized");stage=1;}
+                else if(stage==1&&!launcher.busy()) {
+                    QVariantMap project;for(auto value:launcher.results())if(value.toMap()["title"].toString()=="Fabulously Optimized"){project=value.toMap();break;}
+                    if(project.isEmpty()){timer->stop();qWarning("Could not find the live pack for UI verification.");QCoreApplication::exit(4);return;}
+                    launcher.beginInstall(project,QString(),QString(),true);stage=2;
+                    if(launcher.instances().isEmpty()||!launcher.instances().first().toMap()["_pending"].toBool()){timer->stop();launcher.cancel();QCoreApplication::exit(4);return;}
+                    QTimer::singleShot(200,&app,[&,captured]{
+                        auto window=qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+                        *captured=window&&!window->grabWindow().isNull()&&window->grabWindow().save(parser.value("verify-pack-ui"));
+                        launcher.cancel();
+                    });
+                }else if(stage==2&&*captured&&!launcher.busy()) {
+                    bool ready=false;for(auto value:launcher.instances())ready|=value.toMap()["installed"].toBool();
+                    const bool ok=!ready&&*captured;timer->stop();if(ok)qInfo("Pack UI check passed: real name/icon and pending cards appeared during preparation; cancellation never marked the pack ready.");else qWarning("Pack UI check failed.");QCoreApplication::exit(ok?0:4);
                 }
             });timer->start();
         }
@@ -168,6 +260,7 @@ int main(int argc,char *argv[]) {
         }
         if(parser.isSet("verify-switch")) {
             if(!parser.isSet("data-dir"))return 4;
+            for(auto value:launcher.instances())if(value.toMap()["modCount"].toInt()>0){launcher.selectInstance(value.toMap()["id"].toString());break;}
             if(!engine.rootObjects().isEmpty())engine.rootObjects().first()->setProperty("page","instance");
             auto checkTimer=new QTimer(&app);checkTimer->setInterval(100);
             QObject::connect(checkTimer,&QTimer::timeout,&app,[&,checkTimer,attempt=0]()mutable{
@@ -199,7 +292,8 @@ int main(int argc,char *argv[]) {
         if(parser.isSet("dialog"))QTimer::singleShot(300,&app,[&]{
             if(engine.rootObjects().isEmpty())return;
             auto view=engine.rootObjects().first();
-            if(parser.value("dialog")=="create")QMetaObject::invokeMethod(view,"create");
+            if(parser.value("dialog")=="create"||parser.value("dialog")=="find-pack"){QMetaObject::invokeMethod(view,"create");if(parser.value("dialog")=="find-pack")if(auto dialog=view->findChild<QObject*>("createDialog"))dialog->setProperty("choice",1);}
+            else if(parser.value("dialog")=="import")QMetaObject::invokeMethod(view,"importInstances");
             else if(parser.value("dialog")=="tasks")QMetaObject::invokeMethod(view,"openTaskCenter");
             else if((parser.value("dialog")=="install"||parser.value("dialog")=="pack")&&parser.isSet("data-dir")){
                 const bool pack=parser.value("dialog")=="pack";
