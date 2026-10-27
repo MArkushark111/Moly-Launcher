@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 - A cleaner start
+
+- Add Dawn Client, Fast Client, NoRisk Client, Badlion Client, LabyMod, Feather and GDLauncher import choices with identifying logos and a searchable source rail.
+- Read Fast Client profile indexes and current NoRisk profile databases without importing account fields; other client game folders keep explicit version review and client-feature notices.
+- Fix malformed UTF-8 in instance/install dialogs and keep loading button icons/spinners in one centered group.
+- Decode validated server PNG data in rounded artwork, support raw servers.dat base64, keep server icons across refresh/restarts, and show a real fallback when an image is unavailable.
+- Add per-server checks, address copying, and a compact MOTD preview alongside measured latency/player counts.
+- Show a compact startup window with four real local initialization stages, no minimum delay or catalog dependency, then fade in the workspace.
+
 ## 0.5.0 - Bring your setups along
 
 - Move Tasks to the bottom right; expand it left during work, retain the native arc spinner, and remove its tooltip.

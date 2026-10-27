@@ -48,6 +48,68 @@ void finish(QJsonObject &row) {
     const auto icon=row["iconPath"].toString();
     if (!icon.isEmpty() && QFileInfo(icon).isFile() && !linked(QFileInfo(icon))) row["iconUrl"]=QUrl::fromLocalFile(icon).toString();
 }
+QString clientWarning(const QString &provider) {
+    if(QStringList{"Dawn Client","Fast Client","NoRisk Client","Badlion Client","LabyMod","Lunar Client","Feather"}.contains(provider))
+        return "Copies ordinary Minecraft files. "+provider+" features, accounts, cosmetics, and custom launch components are not imported.";
+    return {};
+}
+QJsonArray clientIndex(const QString &provider,const QString &file,const QStringList &gameRoots,const Context &context) {
+    QFile source(file);if(!source.exists())return {};
+    if(linked(QFileInfo(file))||!source.open(QIODevice::ReadOnly)||source.size()>8*1024*1024)throw Error("Cannot safely read the local profile list.");
+    const auto document=QJsonDocument::fromJson(source.readAll());QJsonValue entries=document.isArray()?QJsonValue(document.array()):QJsonValue(document.object());
+    if(entries.isObject()&&entries.toObject().contains("profiles"))entries=entries.toObject()["profiles"];
+    if(entries.isObject()&&entries.toObject().contains("instances"))entries=entries.toObject()["instances"];
+    QJsonArray profiles;
+    if(entries.isArray())profiles=entries.toArray();else if(entries.isObject())for(auto value:entries.toObject())if(value.isObject())profiles.append(value);
+    QJsonArray result;
+    for(auto value:profiles) {
+        context.check();if(result.size()>=500)break;
+        const auto data=value.toObject();const auto name=first(data,{"name","displayName","title"});
+        auto path=first(data,{"gameDir","gameDirectory","minecraftDirectory","path","directory"});
+        if(!QDir::isAbsolutePath(path)||!QFileInfo(path).isDir()) {
+            path.clear();
+            for(const auto &base:gameRoots){for(const auto &key:QStringList{data["id"].toString(),name}) {
+                if(key.isEmpty())continue;
+                try{const auto folder=safePath(base,key);if(QFileInfo(folder).isDir()&&!linked(QFileInfo(folder))){path=folder;break;}}catch(const std::exception &){}
+                if(!path.isEmpty())break;
+            }if(!path.isEmpty())break;}
+        }
+        if(path.isEmpty()||!QFileInfo(path).isDir()||linked(QFileInfo(path))||QDir(path).isRoot())continue;
+        if(QFileInfo(path+"/.minecraft").isDir())path+="/.minecraft";
+        const auto loaderObject=data["loader"].toObject();
+        auto loader=first(data,{"modLoader","mod_loader","loader","loaderType"});
+        if(loader.isEmpty())loader=first(loaderObject,{"type","name","id"});
+        auto loaderVersion=first(data,{"loaderVersion","loader_version","mod_loader_version"});
+        if(loaderVersion.isEmpty())loaderVersion=first(loaderObject,{"version","loaderVersion"});
+        QJsonObject row{{"provider",provider},{"path",QDir(path).canonicalPath()},{"gameDir",QDir(path).canonicalPath()},
+            {"name",name},{"version",first(data,{"game_version","minecraftVersion","minecraft_version","version"})},
+            {"loader",normalizeLoader(loader)},{"loaderVersion",loaderVersion},{"warning",clientWarning(provider)},{"iconPath",path+"/icon.png"}};
+        finish(row);result.append(row);
+    }
+    return result;
+}
+QJsonArray noRiskDatabase(const QString &database,const Context &context) {
+    if(!QFileInfo(database).isFile()||linked(QFileInfo(database)))return {};
+    const auto connection="moly-norisk-"+QUuid::createUuid().toString(QUuid::WithoutBraces);QJsonArray result;
+    {
+        auto db=QSqlDatabase::addDatabase("QSQLITE",connection);db.setConnectOptions("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=1000");db.setDatabaseName(database);
+        if(db.open()) {
+            QSqlQuery query(db);
+            // Read only profile metadata, never the account or settings columns.
+            if(query.exec("SELECT path,name,game_version,loader,loader_version FROM profiles LIMIT 500"))while(query.next()) {
+                context.check();auto path=query.value(0).toString();
+                if(!QDir::isAbsolutePath(path))path=QDir(QFileInfo(database).absolutePath()).filePath("profiles/"+path);
+                if(!QFileInfo(path).isDir()||linked(QFileInfo(path)))continue;
+                QJsonObject row{{"provider","NoRisk Client"},{"path",QDir(path).canonicalPath()},{"gameDir",QDir(path).canonicalPath()},
+                    {"name",query.value(1).toString()},{"version",query.value(2).toString()},{"loader",normalizeLoader(query.value(3).toString())},
+                    {"loaderVersion",query.value(4).toString()},{"warning",clientWarning("NoRisk Client")}};
+                finish(row);result.append(row);
+            }
+            db.close();
+        }
+    }
+    QSqlDatabase::removeDatabase(connection);return result;
+}
 QJsonArray modrinthDatabase(const QString &database,const Context &context) {
     QJsonArray out;
     if (!QFileInfo::exists(database)) return out;
@@ -87,6 +149,9 @@ QJsonArray modrinthDatabase(const QString &database,const Context &context) {
     return out;
 }
 }
+QStringList InstanceImport::providers() {
+    return {"Modrinth","Prism","CurseForge","Dawn Client","Fast Client","NoRisk Client","Badlion Client","LabyMod","Lunar Client","Feather","GDLauncher","ATLauncher","MultiMC","Minecraft","Folder"};
+}
 QStringList InstanceImport::defaultRoots(const QString &provider) {
     const auto home=QDir::homePath(),roaming=QString::fromLocal8Bit(qgetenv("APPDATA")),local=QString::fromLocal8Bit(qgetenv("LOCALAPPDATA"));
     if(provider=="Modrinth")return {roaming+"/ModrinthApp",roaming+"/com.modrinth.theseus"};
@@ -95,6 +160,13 @@ QStringList InstanceImport::defaultRoots(const QString &provider) {
     if(provider=="CurseForge")return {home+"/curseforge/minecraft/Instances",home+"/Documents/Curse/Minecraft/Instances",home+"/Documents/CurseForge/Minecraft/Instances"};
     if(provider=="ATLauncher")return {roaming+"/ATLauncher/instances",local+"/ATLauncher/instances",home+"/ATLauncher/instances"};
     if(provider=="Lunar Client")return {home+"/.lunarclient/profiles",home+"/.lunarclient/profiles/modpacks"};
+    if(provider=="Dawn Client")return {roaming+"/Dawn",roaming+"/DawnClient",home+"/.dawn",home+"/.feather",roaming+"/.feather"};
+    if(provider=="Fast Client")return {roaming+"/FastClient",roaming+"/.fastclient/profiles"};
+    if(provider=="NoRisk Client")return {roaming+"/norisk/NoRiskClientV3",roaming+"/noriskclient",roaming+"/NoRiskClient"};
+    if(provider=="Badlion Client")return {roaming+"/Badlion Client",roaming+"/BadlionClient",home+"/.badlionclient",roaming+"/.minecraft"};
+    if(provider=="LabyMod")return {roaming+"/LabyMod",roaming+"/LabyMod Launcher",home+"/.laby",roaming+"/.minecraft"};
+    if(provider=="Feather")return {home+"/.feather",roaming+"/.feather"};
+    if(provider=="GDLauncher")return {roaming+"/gdlauncher_next",roaming+"/gdlauncher_carbon",roaming+"/GDLauncher",home+"/.gdlauncher"};
     if(provider=="Minecraft")return {roaming+"/.minecraft"};
     return {};
 }
@@ -149,27 +221,27 @@ QJsonObject InstanceImport::describe(const QString &provider,const QString &fold
         row["loaderVersion"]=first(data,{"loader_version","loaderVersion","mod_loader_version"});
         row["iconPath"]=path+"/icon.png";
         if(QFileInfo(path+"/.minecraft").isDir())row["gameDir"]=path+"/.minecraft";
-        if(provider=="Lunar Client")row["warning"]="Copies ordinary Minecraft files only. Lunar's bundled client features and cosmetics cannot run in Moly.";
+        if(!clientWarning(provider).isEmpty())row["warning"]=clientWarning(provider);
         if(data.isEmpty()&&!QFileInfo(path+"/mods").isDir()&&!QFileInfo(path+"/saves").isDir()&&!QFileInfo(path+"/options.txt").isFile())throw Error("No recognizable Minecraft setup was found here.");
     }
     if(!QFileInfo(row["gameDir"].toString()).isDir()||linked(QFileInfo(row["gameDir"].toString())))throw Error("This instance's game folder is missing or is a link.");
     finish(row);return row;
 }
 QJsonArray InstanceImport::scan(const QString &provider,const QStringList &roots,const Context &context) {
-    if(!QStringList{"Modrinth","Prism","MultiMC","CurseForge","ATLauncher","Lunar Client","Minecraft","Folder"}.contains(provider))throw Error("Choose a supported import source.");
+    if(!providers().contains(provider))throw Error("Choose a supported import source.");
     QJsonArray out;QSet<QString> seen;
     auto append=[&](QJsonObject row){const auto id=row["id"].toString();if(!seen.contains(id)){seen.insert(id);out.append(row);}};
     QString databaseError;
     for(const auto &root:roots) {
         context.check();if(!QFileInfo(root).isDir()||linked(QFileInfo(root)))continue;
-        if(provider=="Minecraft") {
+        if(QStringList{"Minecraft","Badlion Client","LabyMod","Feather"}.contains(provider)&&QFileInfo(root+"/launcher_profiles.json").isFile()) {
             const auto profiles=metadata(root+"/launcher_profiles.json")["profiles"].toObject();
             for(auto it=profiles.begin();it!=profiles.end();++it) {
                 const auto profile=it.value().toObject();auto game=profile["gameDir"].toString(root);
                 if(!QFileInfo(game).isDir()||linked(QFileInfo(game)))continue;
                 auto version=profile["lastVersionId"].toString();
                 QJsonObject row{{"provider",provider},{"path",QDir(game).canonicalPath()},{"gameDir",QDir(game).canonicalPath()},
-                    {"name",profile["name"]},{"sourceProfileId",it.key()},{"loader","Vanilla"}};
+                    {"name",profile["name"]},{"sourceProfileId",it.key()},{"loader","Vanilla"},{"warning",clientWarning(provider)}};
                 if(QRegularExpression("^[a-zA-Z0-9_.+ -]{1,100}$").match(version).hasMatch()&&!version.startsWith("latest-")) {
                     const auto definition=metadata(root+"/versions/"+version+"/"+version+".json");
                     row["version"]=definition["inheritsFrom"].toString(version);
@@ -191,6 +263,16 @@ QJsonArray InstanceImport::scan(const QString &provider,const QStringList &roots
             auto database=root+"/app.db";
             if(!QFileInfo::exists(database) && QFileInfo(root).fileName()=="profiles")database=QFileInfo(root).absolutePath()+"/app.db";
             try{for(auto row:modrinthDatabase(database,context))append(row.toObject());}catch(const std::exception &e){databaseError=QString::fromUtf8(e.what());}
+        }
+        if(QStringList{"Dawn Client","Fast Client","NoRisk Client","Badlion Client","LabyMod","Feather","GDLauncher"}.contains(provider)) {
+            auto gameRoots=QStringList{root+"/profiles",root+"/instances",root};
+            if(provider=="Fast Client"&&QFileInfo(root+"/../.fastclient/profiles").isDir())gameRoots.prepend(QDir(root+"/../.fastclient/profiles").canonicalPath());
+            for(const auto &name:QStringList{"profiles.json","instances.json"})for(auto row:clientIndex(provider,root+"/"+name,gameRoots,context))append(row.toObject());
+            if(provider=="Fast Client"&&QFileInfo(root).fileName()=="profiles") {
+                const auto index=QDir(root+"/../../FastClient").absoluteFilePath("profiles.json");
+                for(auto row:clientIndex(provider,index,gameRoots,context))append(row.toObject());
+            }
+            if(provider=="NoRisk Client")for(const auto &name:QStringList{"app.db","profiles.db"})for(auto row:noRiskDatabase(root+"/"+name,context))append(row.toObject());
         }
         QList<QPair<QString,int>> queue{{root,0}};
         for(qsizetype pos=0;pos<queue.size()&&pos<1500&&out.size()<500;++pos) {

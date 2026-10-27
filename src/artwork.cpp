@@ -19,6 +19,15 @@ void ArtworkView::setShade(qreal value){shade_=qBound(0.0,value,1.0);update();em
 void ArtworkView::setAnimated(bool value){if(animated_==value)return;animated_=value;reload();emit appearanceChanged();}
 void ArtworkView::reload(){
     movie_.stop();movie_.setFileName({});still_={};
+    if(source_.scheme()=="data") {
+        const auto value=source_.toString();const QString prefix="data:image/png;base64,";
+        if(value.startsWith(prefix)&&value.size()<=128*1024) {
+            auto bytes=QByteArray::fromBase64(value.mid(prefix.size()).toLatin1(),QByteArray::AbortOnBase64DecodingErrors);
+            QBuffer buffer(&bytes);buffer.open(QIODevice::ReadOnly);QImageReader reader(&buffer,"PNG");const auto size=reader.size();
+            if(!bytes.isEmpty()&&bytes.size()<=64*1024&&size.width()>0&&size.height()>0&&size.width()<=256&&size.height()<=256)still_=reader.read();
+        }
+        update();return;
+    }
     if(!source_.isLocalFile()){update();return;}
     const auto path=source_.toLocalFile();QImageReader reader(path);const auto size=reader.size();
     if(animated_&&reader.format().toLower()=="gif"){

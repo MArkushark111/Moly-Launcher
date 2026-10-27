@@ -5,6 +5,7 @@
 #include <QVariantMap>
 #include <QStringList>
 #include <functional>
+#include <QMap>
 
 namespace moly {
 
@@ -42,6 +43,8 @@ public:
     void setPingEnabled(bool enabled);
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void refreshStatus();
+    Q_INVOKABLE void refreshServer(const QString &address);
+    Q_INVOKABLE bool copyAddress(const QString &address);
     // The launcher must reject this operation while the owning game is running.
     Q_INVOKABLE bool setWorldIcon(const QString &instanceId, const QString &worldFolder,
                                   const QString &imageUrl);
@@ -53,6 +56,7 @@ signals:
     void checkingStatusChanged();
     void errorChanged();
     void errorOccurred(QString message);
+    void notice(QString message);
     void targetChosen(QString instanceId, QString type, QString value);
 private:
     QString root_, selected_, error_;
@@ -62,6 +66,8 @@ private:
     quint64 generation_ = 0, pingGeneration_ = 0;
     int pendingPings_ = 0;
     QObject *pingGroup_ = nullptr;
+    QMap<QString,QVariantMap> serverSnapshots_;
+    void rememberServer(const QString &address,const QVariantMap &status);
     void cancelPings();
 };
 

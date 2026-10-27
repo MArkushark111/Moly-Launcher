@@ -1406,6 +1406,7 @@ void Launcher::importPack(const QString &url,bool prepareGame) {
         }else enrichReview(result);
     },pendingInstance["id"].toString(),"import");
 }
+QStringList Launcher::importSources() const { return InstanceImport::providers(); }
 void Launcher::scanLocalInstances(const QString &provider,const QString &folder) {
     ++localScanGeneration;localScanCancelled=true;localCandidates={};localScanError.clear();localScanBusy=true;
     localScanProvider=provider;localScanRoots=folder.isEmpty()?InstanceImport::defaultRoots(provider):QStringList{localPath(folder)};

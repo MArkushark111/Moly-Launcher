@@ -28,19 +28,18 @@ Button {
         implicitWidth: label.implicitWidth + (glyph.visible ? glyph.width : 0) + (glyph.visible && label.visible ? contentRow.spacing : 0)
         implicitHeight: Math.max(label.implicitHeight, glyph.visible ? glyph.height : 0)
 
-        ArcSpinner { visible: control.loading; x: contentRow.x; anchors.verticalCenter: parent.verticalCenter; width: 16; height: 16; color: control.labelColor }
         Row {
             id: contentRow
             anchors.centerIn: parent
             spacing: 7
 
-            Icon {
+            Item {
                 id: glyph
                 visible: !!control.iconName || control.loading
-                name: control.loading ? "" : control.iconName
-                color: control.loading ? Theme.transparent : control.labelColor
-                size: 16
+                width: 16; height: 16
                 anchors.verticalCenter: parent.verticalCenter
+                Icon { anchors.centerIn:parent;visible:!control.loading&&!!control.iconName;name:control.iconName;size:16;color:control.labelColor }
+                ArcSpinner { anchors.fill:parent;visible:control.loading;color:control.labelColor }
             }
 
             Text {

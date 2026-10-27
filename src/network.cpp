@@ -18,7 +18,7 @@ static QNetworkRequest makeRequest(const QString &url) {
     if (u.scheme() != "https" || u.host().isEmpty() || !u.userInfo().isEmpty())
         throw Error("Only secure HTTPS downloads are supported.");
     QNetworkRequest r(u);
-    r.setHeader(QNetworkRequest::UserAgentHeader, "MolyLauncher/0.5.0 (Windows)");
+    r.setHeader(QNetworkRequest::UserAgentHeader, "MolyLauncher/0.6.0 (Windows)");
     r.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     r.setMaximumRedirectsAllowed(8);
     r.setTransferTimeout(60000);

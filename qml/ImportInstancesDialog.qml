@@ -25,22 +25,24 @@ LiquidDialog {
         ColumnLayout {
             Layout.preferredWidth:170;Layout.fillHeight:true;spacing:6
             Text { text:"ON THIS COMPUTER";color:Theme.textMuted;font.pixelSize:10;font.letterSpacing:1;Layout.bottomMargin:8 }
-            Repeater {
-                model:["Modrinth","Prism","CurseForge","Lunar Client","ATLauncher","MultiMC","Minecraft","Folder"]
+            MField {id:sourceSearch;Layout.fillWidth:true;placeholderText:"Find a launcher…";implicitHeight:34;Accessible.name:"Find an import source"}
+            ListView {
+                id:sourceList;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:4
+                model:launcher.importSources.filter(function(name){return name.toLowerCase().indexOf(sourceSearch.text.toLowerCase())>=0})
+                ScrollBar.vertical:ScrollBar{}
                 delegate:ItemDelegate {
                     required property string modelData
-                    Layout.fillWidth:true;implicitHeight:42;padding:10
+                    width:ListView.view.width;implicitHeight:42;padding:10
                     onClicked:dialog.chooseSource(modelData)
                     background:Rectangle { radius:11;color:dialog.provider===modelData?Theme.accentSoft:parent.hovered?Theme.surface2:Theme.transparent }
-                    contentItem:RowLayout { spacing:10;ProviderIcon {provider:modelData;Layout.preferredWidth:22;Layout.preferredHeight:22}Text {text:modelData==="Folder"?"Other folder":modelData;color:Theme.text;font.pixelSize:12;Layout.fillWidth:true} }
+                    contentItem:RowLayout { spacing:10;ProviderIcon {provider:modelData;Layout.preferredWidth:22;Layout.preferredHeight:22}Text {text:modelData==="Folder"?"Other folder":modelData;color:Theme.text;font.pixelSize:12;elide:Text.ElideRight;Layout.fillWidth:true} }
                 }
             }
-            Item {Layout.fillHeight:true}
             Text {text:"Local files, copied into Moly.\nYour originals stay in place.";color:Theme.textMuted;font.pixelSize:11;wrapMode:Text.Wrap;Layout.fillWidth:true;lineHeight:1.3}
         }
         Rectangle {Layout.fillHeight:true;Layout.preferredWidth:1;color:Theme.border}
         ColumnLayout {
-            Layout.fillWidth:true;Layout.fillHeight:true;spacing:10
+            Layout.fillWidth:true;Layout.fillHeight:true;spacing:8
             RowLayout {
                 Layout.fillWidth:true
                 Text {text:dialog.provider==="Folder"?"Choose a game folder":dialog.provider+" instances";font.pixelSize:20;font.weight:Font.DemiBold;color:Theme.text;Layout.fillWidth:true}
@@ -60,7 +62,7 @@ LiquidDialog {
                         background:Rectangle {radius:10;color:dialog.candidateId===modelData.id?Theme.accentSoft:parent.hovered?Theme.surface2:Theme.transparent}
                         contentItem:RowLayout {
                             spacing:10
-                            InstanceAvatar {imageSource:modelData.iconUrl||"";Layout.preferredWidth:34;Layout.preferredHeight:34}
+                            Rectangle {Layout.preferredWidth:34;Layout.preferredHeight:34;radius:9;color:Theme.surface2;InstanceAvatar {anchors.fill:parent;imageSource:modelData.iconUrl||"";visible:!!modelData.iconUrl}ProviderIcon {anchors.centerIn:parent;provider:dialog.provider;width:24;height:24;visible:!modelData.iconUrl}}
                             ColumnLayout {Layout.fillWidth:true;spacing:4;Text {text:modelData.name;color:Theme.text;font.pixelSize:13;font.weight:Font.DemiBold;elide:Text.ElideRight;Layout.fillWidth:true}Text {text:(modelData.loader||"Minecraft")+" · "+(modelData.version||"Version needed");color:Theme.textSecondary;font.pixelSize:11}}
                             Icon {visible:dialog.candidateId===modelData.id;name:"check";size:16;color:Theme.accent}
                         }
@@ -72,6 +74,10 @@ LiquidDialog {
                     Text {text:launcher.importScanning?"Looking for local setups…":launcher.importScanError||"No instances found here. Choose the launcher's data folder or an individual game folder.";color:Theme.textSecondary;font.pixelSize:12;wrapMode:Text.Wrap;horizontalAlignment:Text.AlignHCenter;Layout.fillWidth:true}
                 }
             }
+            ScrollView {
+                id:detailScroll;Layout.fillWidth:true;Layout.preferredHeight:Math.min(168,detailContent.implicitHeight);Layout.minimumHeight:60;clip:true;contentWidth:availableWidth
+                ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
+                ColumnLayout {id:detailContent;width:detailScroll.availableWidth;spacing:8
             Text {visible:!!dialog.selected.warning;text:dialog.selected.warning||"";color:Theme.textSecondary;font.pixelSize:11;wrapMode:Text.Wrap;Layout.fillWidth:true}
             RowLayout {
                 visible:!!dialog.selected.id;Layout.fillWidth:true
@@ -86,6 +92,8 @@ LiquidDialog {
             }
             RowLayout {Layout.fillWidth:true;Text {text:"Include worlds";color:Theme.text;font.pixelSize:12;Layout.fillWidth:true}MSwitch {id:worlds;checked:true;Accessible.name:"Include worlds in import"}}
             Text {text:"Close Minecraft for this setup first. Copies mods, packs, configuration, screenshots, and optional worlds. Moly prepares its own game and Java files.";color:Theme.textMuted;font.pixelSize:11;wrapMode:Text.Wrap;Layout.fillWidth:true}
+                }
+            }
             RowLayout {
                 Layout.alignment:Qt.AlignRight;spacing:8
                 MButton {text:"Cancel";onClicked:dialog.close()}

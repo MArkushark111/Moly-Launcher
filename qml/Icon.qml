@@ -32,6 +32,8 @@ Canvas {
         case "plus": line([12,5,12,19]);line([5,12,19,12]);break
         case "play": line([7,4,20,12,7,20,7,4]);break
         case "stop": rect(5,5,14,14);break
+        case "copy": rect(8,8,12,13);line([16,4,4,4,4,17]);break
+        case "servers": rect(4,3,16,7);rect(4,14,16,7);circle(8,6.5,0.7);circle(8,17.5,0.7);line([13,6.5,17,6.5]);line([13,17.5,17,17.5]);break
         case "folder": line([3,7,3,20,21,20,21,7,12,7,10,4,3,4,3,7]);break
         case "file": line([6,3,15,3,20,8,20,21,6,21,6,3]);line([15,3,15,8,20,8]);break
         case "world": line([3,17,8,9,12,14,16,6,21,17,3,17]);line([3,21,21,21]);circle(6,5,1.5);break

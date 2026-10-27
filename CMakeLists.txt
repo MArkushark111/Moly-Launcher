@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(MolyLauncher VERSION 0.5.0 LANGUAGES CXX)
+project(MolyLauncher VERSION 0.6.0 LANGUAGES CXX)
 set(CMAKE_INSTALL_BINDIR ".")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,7 +19,7 @@ target_include_directories(moly_desktop PUBLIC src)
 target_link_libraries(moly_desktop PUBLIC moly_engine Qt6::Gui Qt6::Quick Qt6::Network Qt6::Concurrent Qt6::Sql PRIVATE Qt6::CorePrivate)
 file(GLOB default_skin_textures CONFIGURE_DEPENDS "assets/default-skins/wide/*.png" "assets/default-skins/slim/*.png")
 qt_add_resources(moly_desktop "default_skins" PREFIX "/moly/skins" BASE "assets/default-skins" FILES ${default_skin_textures})
-qt_add_executable(MolyLauncher WIN32 src/main.cpp src/launcher.cpp src/launcher.h)
+qt_add_executable(MolyLauncher WIN32 src/startup.h src/main.cpp src/launcher.cpp src/launcher.h)
 if(WIN32)
     enable_language(RC)
     target_sources(MolyLauncher PRIVATE assets/moly.rc)
@@ -27,12 +27,12 @@ if(WIN32)
 endif()
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 qt_add_qml_module(MolyLauncher URI Moly VERSION 1.0 QML_FILES
-    qml/ImportInstancesDialog.qml qml/ReorderHandle.qml qml/MSpinBox.qml qml/ArcSpinner.qml qml/MSlider.qml qml/MComboBox.qml qml/ProviderIcon.qml qml/MMenu.qml qml/MMenuItem.qml qml/MCheckBox.qml qml/TaskActivity.qml qml/InstanceSettings.qml qml/MProgressBar.qml qml/LiquidDialog.qml qml/InstanceAvatar.qml qml/Theme.qml qml/MSwitch.qml qml/Icon.qml qml/NavItem.qml qml/TabStrip.qml qml/InstallDialog.qml
+    qml/Startup.qml qml/ImportInstancesDialog.qml qml/ReorderHandle.qml qml/MSpinBox.qml qml/ArcSpinner.qml qml/MSlider.qml qml/MComboBox.qml qml/ProviderIcon.qml qml/MMenu.qml qml/MMenuItem.qml qml/MCheckBox.qml qml/TaskActivity.qml qml/InstanceSettings.qml qml/MProgressBar.qml qml/LiquidDialog.qml qml/InstanceAvatar.qml qml/Theme.qml qml/MSwitch.qml qml/Icon.qml qml/NavItem.qml qml/TabStrip.qml qml/InstallDialog.qml
     qml/Main.qml qml/MButton.qml qml/MField.qml qml/Panel.qml qml/Badge.qml
     qml/LibraryPage.qml qml/InstancePage.qml qml/DiscoverPage.qml
     qml/AccountsPage.qml qml/SettingsPage.qml qml/LogView.qml qml/LogWindow.qml
     qml/MediaImage.qml qml/SkinsPage.qml qml/PlayTargets.qml qml/CreateInstanceDialog.qml qml/DownloadManager.qml
-    RESOURCES assets/prism.svg assets/multimc.svg assets/atlauncher.png assets/lunar.ico assets/minecraft-folder.svg assets/modrinth.svg assets/curseforge.svg assets/moly.svg assets/moly-monochrome.svg assets/Inter.ttf assets/Inter-OFL.txt)
+    RESOURCES assets/dawn.png assets/fastclient.svg assets/norisk.png assets/badlion.png assets/labymod.png assets/feather.png assets/gdlauncher.ico assets/prism.svg assets/multimc.svg assets/atlauncher.png assets/lunar.ico assets/minecraft-folder.svg assets/modrinth.svg assets/curseforge.svg assets/moly.svg assets/moly-monochrome.svg assets/Inter.ttf assets/Inter-OFL.txt)
 target_link_libraries(MolyLauncher PRIVATE moly_desktop Qt6::QuickControls2)
 enable_testing()
 qt_add_executable(moly_tests tests/core_tests.cpp)
@@ -85,3 +85,12 @@ target_link_libraries(confirm_integration PRIVATE moly_desktop)
 qt_add_executable(instanceimport_tests tests/instanceimport_tests.cpp)
 target_link_libraries(instanceimport_tests PRIVATE moly_desktop Qt6::Test Qt6::Sql)
 add_test(NAME local_instance_import COMMAND instanceimport_tests)
+
+qt_add_executable(artwork_tests tests/artwork_tests.cpp)
+target_link_libraries(artwork_tests PRIVATE moly_desktop Qt6::Test)
+target_compile_definitions(artwork_tests PRIVATE MOLY_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
+add_test(NAME artwork_rendering COMMAND artwork_tests)
+qt_add_executable(startup_tests tests/startup_tests.cpp src/startup.h)
+target_link_libraries(startup_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
+target_include_directories(startup_tests PRIVATE src)
+add_test(NAME startup_stages COMMAND startup_tests)

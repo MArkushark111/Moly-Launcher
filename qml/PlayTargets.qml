@@ -32,7 +32,7 @@ ColumnLayout {
             id: targetRow
             required property var modelData
             Layout.fillWidth: true
-            implicitHeight: 78
+            implicitHeight: modelData.type==="server"?94:78
             radius: 14
             color: rowHover.hovered ? Theme.surface2 : Theme.surface
             border.color: Theme.border
@@ -45,8 +45,8 @@ ColumnLayout {
                 Rectangle {
                     Layout.preferredWidth: 48; Layout.preferredHeight: 48
                     radius: 11; color: Theme.surface2
-                    ArtworkView { anchors.fill:parent;radius:11;shade:0;source:targetRow.modelData.iconUrl||"";animated:false }
-                    Icon { anchors.centerIn: parent; name: targetRow.modelData.type === "world" ? "world" : "servers"; size: 23; visible: !targetRow.modelData.iconUrl }
+                    ArtworkView { id:targetPicture;anchors.fill:parent;radius:11;shade:0;source:targetRow.modelData.iconUrl||"";animated:false }
+                    Icon { anchors.centerIn: parent; name: targetRow.modelData.type === "world" ? "world" : "servers"; size: 23; visible: !targetPicture.ready }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true; spacing: 4
@@ -55,6 +55,7 @@ ColumnLayout {
                         text: (panel.showInstanceName ? (targetRow.modelData.instanceName || "") + " · " : "") + (targetRow.modelData.type === "world" ? (targetRow.modelData.subtitle || "Singleplayer") : (targetRow.modelData.address || ""))
                         color: Theme.textMuted; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true; textFormat: Text.PlainText
                     }
+                    Text {visible:targetRow.modelData.type==="server"&&!!targetRow.modelData.motd;text:(targetRow.modelData.motd||"").split(/\r?\n/).filter(function(line){return line.trim().length>0})[0]||"";color:Theme.textSecondary;font.pixelSize:11;elide:Text.ElideRight;Layout.fillWidth:true;textFormat:Text.PlainText}
                 }
                 ColumnLayout {
                     visible: targetRow.modelData.type === "server"
@@ -74,8 +75,10 @@ ColumnLayout {
                     }
                     Text { text: targetRow.modelData.status === "online" ? targetRow.modelData.onlinePlayers + " / " + targetRow.modelData.maxPlayers + " online" : ""; color: Theme.textMuted; font.pixelSize: 10; textFormat: Text.PlainText }
                 }
+                MButton {visible:targetRow.modelData.type==="server";iconName:"refresh";compact:true;kind:"ghost";enabled:playTargets.pingEnabled&&!panel.checkingStatus;Accessible.name:"Check "+targetRow.modelData.name;onClicked:playTargets.refreshServer(targetRow.modelData.address)}
+                MButton {visible:targetRow.modelData.type==="server";iconName:"copy";compact:true;kind:"ghost";Accessible.name:"Copy address for "+targetRow.modelData.name;onClicked:playTargets.copyAddress(targetRow.modelData.address)}
                 MButton { visible: panel.allowWorldIconChanges && targetRow.modelData.type === "world"; text: ""; iconName: "file"; kind: "secondary"; compact: true; background:Rectangle {radius:10;color:rowHover.hovered?Theme.app:Theme.surface;border.color:Theme.border;Behavior on color {ColorAnimation {duration:Theme.motion?160:0}}} enabled: panel.actionsEnabled; Accessible.name: "Change world icon for " + targetRow.modelData.name; onClicked: panel.changeWorldIcon(targetRow.modelData) }
-                MButton { text: targetRow.modelData.type === "server" ? "Join" : "Play"; iconName: "play"; compact: true; kind: "primary"; enabled: panel.actionsEnabled; onClicked: panel.activated(targetRow.modelData); Accessible.name: (targetRow.modelData.type === "server" ? "Join " : "Play ") + targetRow.modelData.name }
+                MButton { loading:launcher.busy&&launcher.taskOperation==="launch"&&launcher.taskInstanceId===targetRow.modelData.instanceId;text:loading?"Starting":targetRow.modelData.type === "server" ? "Join" : "Play"; iconName: "play"; compact: true; kind: "primary"; enabled: panel.actionsEnabled; onClicked: panel.activated(targetRow.modelData); Accessible.name: (targetRow.modelData.type === "server" ? "Join " : "Play ") + targetRow.modelData.name }
             }
         }
     }

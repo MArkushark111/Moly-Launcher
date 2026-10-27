@@ -83,7 +83,7 @@ LiquidDialog {
         }
         RowLayout { visible: dialog.projectMode && launcher.loadingInstallChoices; spacing: 10
             ArcSpinner { Layout.preferredWidth:18;Layout.preferredHeight:18 }
-            Text { text:"Loading available versions…";color:Theme.textSecondary;font.pixelSize:12 }
+            Text { text:"Loading available versionsâ€¦";color:Theme.textSecondary;font.pixelSize:12 }
         }
         Text { visible: dialog.projectMode; text:"Nothing installs until you confirm. Required dependencies are included; any restricted downloads or local changes will be shown before files are replaced.";color:Theme.textSecondary;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true }
         Rectangle {

@@ -191,3 +191,18 @@ The confirm UI check needs an empty compatible Fabric 1.20.1 instance; do not ru
 ```
 
 The pack-preparation check requires empty isolated storage, contacts Modrinth, and cancels its real preparation after capturing the UI. Never run these helpers against ordinary user storage.
+
+## 0.6.0 verification
+
+- Nine CTest suites pass. New artwork tests paint actual PNG data URIs into rounded images, check transparent corners and reject malformed/oversized images. An encoding regression reads every QML source as strict UTF-8. Startup tests count completed stages and never mark the interface ready early.
+- A real local Java-status mock supplies an icon, MOTD, player counts and pong; tests verify normalized data, disk icon caching, and reloading the cached picture. Saved servers.dat raw-base64 icons are covered too.
+- Fast Client profile-index and current NoRisk SQLite fixtures verify correct game folders, loaders and exclusion of account fields. Additional client choices retain explicit version review for unidentified folders.
+- The rendered startup check completed all four local stages and the workspace fade, about 430 ms in the recorded warm run on this PC. That time is not a performance promise for other systems. It has no catalog-finished dependency or minimum splash duration.
+- Rendered and inspected the Play loading state, small-window import chooser, and live Donut SMP card. The live server returned its real icon, measured latency and player counts; server availability and counts naturally vary.
+- Read-only discovery found this PC's existing Fast Client profile. No real client installation was imported or changed. The Play loading screenshot is a UI-state preview, not a new full-game launch test.
+- The packaged runtime and SQL/image plugins are checked with a minimal system PATH. No new Microsoft login, full game session or separate clean-machine test is claimed.
+
+```powershell
+.\build-release\MolyLauncher.exe --data-dir .\test-data\ui-060 --verify-startup --capture-startup .\docs\screenshots\startup-060.png
+.\build-release\MolyLauncher.exe --data-dir .\test-data\ui-060 --dialog import --import-source "Fast Client" --screenshot .\docs\screenshots\fast-import-060.png
+```

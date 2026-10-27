@@ -52,6 +52,7 @@ class Launcher : public QObject {
     Q_PROPERTY(QVariantList importCandidates READ importCandidates NOTIFY importScanChanged)
     Q_PROPERTY(bool importScanning READ importScanning NOTIFY importScanChanged)
     Q_PROPERTY(QString importScanError READ importScanError NOTIFY importScanChanged)
+    Q_PROPERTY(QStringList importSources READ importSources CONSTANT)
   public:
     explicit Launcher(QString root, QObject *parent = nullptr);
     ~Launcher() override;
@@ -144,6 +145,7 @@ class Launcher : public QObject {
     QVariantList importCandidates() const { return localCandidates.toVariantList(); }
     bool importScanning() const { return localScanBusy; }
     QString importScanError() const { return localScanError; }
+    QStringList importSources() const;
     Q_INVOKABLE void scanLocalInstances(const QString &provider, const QString &folder = {});
     Q_INVOKABLE void importLocalInstance(const QString &candidateId, const QVariantMap &overrides, bool includeWorlds = true);
     Q_INVOKABLE void moveInstance(const QString &id, const QString &beforeId, bool after = false);

@@ -2,11 +2,11 @@
 
 A Windows Minecraft Java Edition launcher built with C++20 and Qt Quick. Moly keeps each Minecraft setup in its own **instance**, so its worlds, mods, resource packs, and shaders stay together.
 
-This is a **0.5.0 preview**. The launcher has working installation and local launch paths; Microsoft sign-in and CurseForge require your own service credentials.
+This is a **0.6.0 preview**. The launcher has working installation and local launch paths; Microsoft sign-in and CurseForge require your own service credentials.
 
 ## Run the portable build
 
-Extract the entire `MolyLauncher-0.5.0-Windows-x64.zip` archive, then open **MolyLauncher.exe**. Keep the accompanying DLLs and folders beside it. The executable in `dist/MolyLauncher-0.5.0/` is also ready to run without a Qt installation.
+Extract the entire `MolyLauncher-0.6.0-Windows-x64.zip` archive, then open **MolyLauncher.exe**. Keep the accompanying DLLs and folders beside it. The executable in `dist/MolyLauncher-0.6.0/` is also ready to run without a Qt installation.
 
 ## First use
 
@@ -89,7 +89,7 @@ Inside the data folder, `instances/<id>/game` holds each instance's game files. 
 .\scripts\build.ps1 -Package
 ```
 
-This prepares the app with its Qt runtime under `dist/MolyLauncher-0.5.0` and creates a ZIP. With an installed Inno Setup compiler, pass its `ISCC.exe` path using `-InnoCompiler` to build the installer described by `packaging/moly.iss`.
+This prepares the app with its Qt runtime under `dist/MolyLauncher-0.6.0` and creates a ZIP. With an installed Inno Setup compiler, pass its `ISCC.exe` path using `-InnoCompiler` to build the installer described by `packaging/moly.iss`.
 
 The packaging recipe does not provide a code-signing certificate. A clean-machine installation test and a signed release are still release tasks. See [THIRD_PARTY.md](THIRD_PARTY.md) for runtime notices and [docs/TESTING.md](docs/TESTING.md) for verification details.
 
@@ -125,3 +125,11 @@ Modrinth's current SQLite database and older folder profiles, Prism/MultiMC, Cur
 Drag the six-dot handles to arrange instances. Dropping above/below an instance places it before/after; **My order** keeps that layout across restarts. Focus a handle and use **Alt+Up/Down** for keyboard ordering.
 
 The Windows installer associates **.mlypack** with Moly. For the portable build, use **Settings > Advanced > Use Moly for .mlypack**. Explorer then shows Moly's icon and double-clicking opens a confirmation. If Moly is already open, the request goes to its existing window.
+
+## Startup and saved servers
+
+The compact startup screen counts four completed local stages: library, player assets, interface creation, and the first rendered frame. It has no minimum display time and does not wait for online catalog refreshes. Reduce motion removes the workspace fade.
+
+Saved server cards show their validated icon, first MOTD line, player count and measured connection time. Use the circular arrow to check one server or the copy icon to copy its address. Icons remain available from Moly's cache after restarting; a server without a usable picture gets the server-rack symbol.
+
+The local source list also includes Dawn Client, Fast Client, NoRisk Client, Badlion Client, LabyMod, Feather, and GDLauncher. Fast Client's local profile index and NoRisk's current profile database are recognized. Other layouts can use ordinary game folders with explicit version selection. Client accounts, cosmetics, bundled features and custom launch components are not migrated.

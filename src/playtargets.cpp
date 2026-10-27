@@ -2,6 +2,9 @@
 #include "core.h"
 
 #include <QDateTime>
+#include <QCryptographicHash>
+#include <QGuiApplication>
+#include <QClipboard>
 #include <QBuffer>
 #include <QDir>
 #include <QDnsLookup>
@@ -155,12 +158,18 @@ QString fileImage(const QString &path) {
 
 QString serverImage(const QString &value) {
     constexpr auto prefix="data:image/png;base64,";
-    if(!value.startsWith(QLatin1String(prefix)) || value.size()>128*1024)return {};
-    const auto bytes=QByteArray::fromBase64(value.mid(qstrlen(prefix)).toLatin1(),QByteArray::AbortOnBase64DecodingErrors);
+    if(value.isEmpty() || value.size()>128*1024)return {};
+    // servers.dat stores plain base64, while the status protocol uses a data URI.
+    const auto encoded=value.startsWith(QLatin1String(prefix))?value.mid(qstrlen(prefix)):value;
+    auto bytes=QByteArray::fromBase64(encoded.toLatin1(),QByteArray::AbortOnBase64DecodingErrors);
     if(bytes.isEmpty() || bytes.size()>64*1024)return {};
-    const auto image=QImage::fromData(bytes,"PNG");
-    if(image.isNull() || image.width()>256 || image.height()>256)return {};
-    return value;
+    QBuffer buffer(&bytes);buffer.open(QIODevice::ReadOnly);QImageReader reader(&buffer,"PNG");const auto size=reader.size();
+    if(size.width()<1||size.height()<1||size.width()>256||size.height()>256||reader.read().isNull())return {};
+    return QLatin1String(prefix)+QString::fromLatin1(bytes.toBase64());
+}
+QString serverIconPath(const QString &root,const QString &address) {
+    const auto key=QCryptographicHash::hash(address.trimmed().toLower().toUtf8(),QCryptographicHash::Sha256).toHex();
+    return root+"/cache/server-icons/"+QString::fromLatin1(key)+".png";
 }
 
 QByteArray varInt(quint32 value) {
@@ -362,7 +371,9 @@ QVariantList savedPlayTargets(const QString &root,const QStringList &requestedId
                     auto row=common();row["type"]="server";row["value"]=address;row["address"]=address;
                     row["id"]=id+"/server/"+address;row["name"]=plain(server["name"].toString());
                     if(row["name"].toString().isEmpty())row["name"]=address;
-                    row["subtitle"]=address;row["status"]="unknown";row["statusLabel"]="Not checked";row["iconUrl"]=serverImage(server["icon"].toString());items.append(row);
+                    row["subtitle"]=address;row["status"]="unknown";row["statusLabel"]="Not checked";
+                    auto icon=serverImage(server["icon"].toString());if(icon.isEmpty())icon=fileImage(serverIconPath(root,address));
+                    row["iconUrl"]=icon;items.append(row);
                 }
             }catch(const std::exception &){ /* Damaged servers.dat must not hide saved worlds. */ }
         }catch(const std::exception &){ /* One unavailable instance must not hide the others. */ }
@@ -390,7 +401,7 @@ void PlayTargets::refresh(){
     auto watcher=new QFutureWatcher<QVariantList>(this);const auto root=root_;const auto ids=instanceIds_;
     connect(watcher,&QFutureWatcher<QVariantList>::finished,this,[this,watcher,ticket]{
         if(ticket!=generation_){watcher->deleteLater();return;}
-        try{allItems_=watcher->result();}catch(const std::exception &e){error_=QString::fromUtf8(e.what());allItems_.clear();emit errorChanged();emit errorOccurred(error_);}
+        try{allItems_=watcher->result();for(auto &value:allItems_){auto row=value.toMap();const auto old=serverSnapshots_.value(row["address"].toString());if(row["type"]=="server"){if(row["iconUrl"].toString().isEmpty())row["iconUrl"]=old["iconUrl"];row["motd"]=old["motd"];}value=row;}}catch(const std::exception &e){error_=QString::fromUtf8(e.what());allItems_.clear();emit errorChanged();emit errorOccurred(error_);}
         loading_=false;emit loadingChanged();emit itemsChanged();watcher->deleteLater();if(pingEnabled_)refreshStatus();
     });
     watcher->setFuture(QtConcurrent::run([root,ids]{return savedPlayTargets(root,ids);}));
@@ -412,14 +423,43 @@ void PlayTargets::refreshStatus(){
         if(ticket!=pingGeneration_||queue->isEmpty())return;
         const auto pending=queue->takeFirst();const auto ids=pending.second;
         auto keepAlive=weakAdvance.lock();
-        new StatusProbe(pending.first,[this,ids,ticket,keepAlive](QVariantMap status){
+        new StatusProbe(pending.first,[this,ids,ticket,keepAlive,address=pending.first](QVariantMap status){
             if(ticket!=pingGeneration_)return;
+            rememberServer(address,status);
             for(auto &v:allItems_){auto row=v.toMap();if(!ids.contains(row["id"].toString()))continue;for(auto it=status.cbegin();it!=status.cend();++it)row[it.key()]=it.value();v=row;}
             pendingPings_=qMax(0,pendingPings_-1);emit itemsChanged();emit checkingStatusChanged();
             if(keepAlive)(*keepAlive)();
         },pingGroup_);
     };
     for(int i=0;i<8&&!queue->isEmpty();++i)(*advance)();
+}
+void PlayTargets::rememberServer(const QString &address,const QVariantMap &status) {
+    auto saved=serverSnapshots_.value(address);
+    for(const auto &key:QStringList{"iconUrl","motd","serverVersion"})if(status.contains(key)&&!status[key].toString().isEmpty())saved[key]=status[key];
+    serverSnapshots_[address]=saved;
+    const auto icon=serverImage(status.value("iconUrl").toString());if(icon.isEmpty())return;
+    const auto bytes=QByteArray::fromBase64(icon.mid(QString("data:image/png;base64,").size()).toLatin1());
+    try {
+        const auto path=serverIconPath(root_,address);safePath(root_,"cache/server-icons/"+QFileInfo(path).fileName());
+        QFile old(path);if(old.open(QIODevice::ReadOnly)&&old.readAll()==bytes)return;
+        writeBytes(path,bytes);
+    }catch(const std::exception &){} // A cache failure must not hide the live server status.
+}
+void PlayTargets::refreshServer(const QString &address) {
+    if(!pingEnabled_||checkingStatus()||parseMinecraftAddress(address).isEmpty())return;
+    bool found=false;for(auto &value:allItems_){auto row=value.toMap();if(row["type"]=="server"&&row["address"]==address){row["status"]="checking";row["statusLabel"]="Checking…";value=row;found=true;}}
+    if(!found)return;
+    cancelPings();pingGroup_=new QObject(this);pendingPings_=1;const auto ticket=pingGeneration_;
+    emit itemsChanged();emit checkingStatusChanged();
+    new StatusProbe(address,[this,address,ticket](QVariantMap status){
+        if(ticket!=pingGeneration_)return;rememberServer(address,status);
+        for(auto &value:allItems_){auto row=value.toMap();if(row["type"]!="server"||row["address"]!=address)continue;for(auto it=status.cbegin();it!=status.cend();++it)row[it.key()]=it.value();value=row;}
+        pendingPings_=0;emit itemsChanged();emit checkingStatusChanged();
+    },pingGroup_);
+}
+bool PlayTargets::copyAddress(const QString &address) {
+    if(parseMinecraftAddress(address).isEmpty()||!qobject_cast<QGuiApplication*>(QCoreApplication::instance()))return false;
+    QGuiApplication::clipboard()->setText(address);emit notice("Server address copied.");return true;
 }
 bool PlayTargets::setWorldIcon(const QString &instanceId,const QString &worldFolder,const QString &imageUrl){
     try{

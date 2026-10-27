@@ -9,7 +9,7 @@ ApplicationWindow {
     height: 820
     minimumWidth: 1024
     minimumHeight: 640
-    visible: true
+    visible: startup.interfaceVisible
     title: "Moly Launcher"
     color: Theme.app
     font.family: Theme.fontFamily
@@ -103,6 +103,10 @@ ApplicationWindow {
     }
     Component.onCompleted: {page=launcher.settings.startupPage||"library";if(launcher.settings.launcherFullscreen)showFullScreen()}
     ColumnLayout {
+        objectName:"workspace"
+        opacity:startup.ready?1:0
+        Behavior on opacity {NumberAnimation {duration:Theme.motion?200:0;easing.type:Easing.OutCubic}}
+        enabled:startup.ready
         anchors.fill:parent
         spacing:0
         RowLayout {

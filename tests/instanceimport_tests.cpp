@@ -60,6 +60,28 @@ private slots:
         QCOMPARE(fileHash(dbPath,"sha256"),before);
         QVERIFY(!QJsonDocument(found).toJson().contains("do-not-import"));
     }
+    void fastClientIndexUsesItsOwnGameFolders() {
+        QTemporaryDir source;const auto folder=source.path()+"/profiles/Fixture profile";data(folder);
+        writeObject(source.path()+"/profiles.json",{{"profiles",QJsonArray{QJsonObject{{"id","fixture-id"},{"name","Fixture profile"},{"version","1.21.1"},{"modLoader","fabric"},{"loaderVersion","0.16.14"},{"accountId","secret-not-imported"},{"javaPath","not-copied.exe"}}}}});
+        const auto rows=InstanceImport::scan("Fast Client",{source.path()});QCOMPARE(rows.size(),1);
+        const auto row=rows.first().toObject();QCOMPARE(row["gameDir"].toString(),QDir(folder).canonicalPath());QCOMPARE(row["version"].toString(),QString("1.21.1"));QCOMPARE(row["loader"].toString(),QString("Fabric"));
+        QVERIFY(!QJsonDocument(rows).toJson().contains("secret-not-imported"));QVERIFY(!QJsonDocument(rows).toJson().contains("not-copied.exe"));
+    }
+    void noRiskDatabaseReadsOnlyProfileMetadata() {
+        QTemporaryDir source;const auto folder=source.path()+"/profiles/Fixture profile";data(folder);const auto file=source.path()+"/app.db";
+        {auto db=QSqlDatabase::addDatabase("QSQLITE","nrc-fixture");db.setDatabaseName(file);QVERIFY(db.open());QSqlQuery query(db);
+            QVERIFY(query.exec("CREATE TABLE profiles (path TEXT,name TEXT,game_version TEXT,loader TEXT,loader_version TEXT,preferred_account_id TEXT)"));
+            QVERIFY(query.exec("INSERT INTO profiles VALUES ('Fixture profile','Fixture profile','1.21.1','fabric','0.16.14','never-import-this')"));db.close();}
+        QSqlDatabase::removeDatabase("nrc-fixture");const auto original=fileHash(file);
+        const auto rows=InstanceImport::scan("NoRisk Client",{source.path()});QCOMPARE(rows.size(),1);QCOMPARE(rows.first().toObject()["loader"].toString(),QString("Fabric"));QCOMPARE(fileHash(file),original);QVERIFY(!QJsonDocument(rows).toJson().contains("never-import-this"));
+    }
+    void additionalClientFoldersStayExplicit() {
+        QTemporaryDir source;data(source.path());
+        for(const auto &provider:QStringList{"Dawn Client","Badlion Client","LabyMod","Feather","GDLauncher"}) {
+            QVERIFY(InstanceImport::providers().contains(provider));const auto rows=InstanceImport::scan(provider,{source.path()});QCOMPARE(rows.size(),1);
+            QVERIFY(!rows.first().toObject()["supported"].toBool());QVERIFY(rows.first().toObject()["version"].toString().isEmpty());
+        }
+    }
     void copiesDataWithoutSecretsOrChangingOriginals() {
         QTemporaryDir source,destination;data(source.path());
         auto candidate=InstanceImport::describe("Folder",source.path());
