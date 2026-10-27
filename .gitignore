@@ -1,0 +1,23 @@
+/build*/
+/cmake-build-*/
+/.qtcreator/
+/dist/
+/.idea/
+/CMakeUserPresets.json
+/test-data/
+*.user
+*.log
+
+# Local data, credentials, and generated artifacts
+/docs/screenshots/
+/.env
+/.env.*
+/settings.json
+/accounts.json
+/instances/
+/cache/
+/runtimes/
+/skins/
+*.pem
+*.pfx
+*.p12

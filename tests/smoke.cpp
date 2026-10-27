@@ -1,0 +1,13 @@
+#include <QCoreApplication>
+#include <QJsonDocument>
+#include <QTextStream>
+#include <QDir>
+#include <QProcess>
+#include <QTimer>
+#include "minecraft.h"
+#include "content.h"
+using namespace moly;
+int main(int argc,char **argv){QCoreApplication app(argc,argv);auto args=app.arguments();QTextStream out(stdout);if(args.size()<3){out<<"Usage: moly_smoke <data-dir> <catalog|install|launch|content> [version] [loader]\n";return 2;}QString root=QDir(args[1]).absolutePath(),mode=args[2];Context c{nullptr,[&](QString s,qint64 done,qint64 total){if(!total||done==total||done%100==0)out<<s<<" "<<done<<"/"<<total<<Qt::endl;}};
+try{Minecraft mc(root,c);if(mode=="catalog"){auto v=mc.versions(false);out<<v.size()<<" releases; latest "<<v[0].toObject()["id"].toString()<<Qt::endl;auto results=Content(root,{},c).search("Modrinth","modpack","Fabulously",{});out<<results.size()<<" modpack search results"<<Qt::endl;return v.isEmpty()||results.isEmpty();}QString version=args.value(3,"1.20.1"),loader=args.value(4,"Vanilla");QString id="smoke-"+loader.toLower();QJsonObject i{{"schemaVersion",1},{"id",id},{"name",loader+" smoke test"},{"version",version},{"loader",loader},{"settings",QJsonObject{}}};QJsonObject settings{{"memoryMb",2048},{"width",854},{"height",480}};QString dir=root+"/instances/"+id;QDir().mkpath(dir);writeObject(dir+"/instance.json",i);
+if(mode=="install"){auto state=mc.install(i,settings);out<<"INSTALLED: "<<state["java"].toString()<<Qt::endl;return 0;}if(mode=="content"){i["loader"]="Fabric";auto plan=Content(root,{},c).plan({{"provider","Modrinth"},{"projectId","sodium"},{"title","Sodium"},{"type","mod"}},i);out<<QJsonDocument(plan).toJson()<<Qt::endl;Content(root,{},c).apply(i,plan);out<<"CONTENT INSTALLED"<<Qt::endl;return 0;}if(mode=="launch"){auto state=readObject(dir+"/installation.json");auto cmd=Minecraft::command(state,i,settings,{{"name","MolyTest"},{"uuid",offlineUuid("MolyTest")}},{});QProcess p;p.setWorkingDirectory(cmd.workingDirectory);p.setProcessChannelMode(QProcess::MergedChannels);QObject::connect(&p,&QProcess::readyReadStandardOutput,&app,[&]{out<<redact(QString::fromUtf8(p.readAllStandardOutput()))<<Qt::flush;});QObject::connect(&p,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),&app,[&](int code,QProcess::ExitStatus){app.exit(code);});p.start(cmd.program,cmd.arguments);if(!p.waitForStarted())throw Error("Java failed to start.");QTimer::singleShot(45000,&app,[&]{out<<"SMOKE: stopping after 45 seconds"<<Qt::endl;p.kill();p.waitForFinished();app.exit(0);});return app.exec();}return 2;
+}catch(const std::exception &e){out<<"ERROR: "<<e.what()<<Qt::endl;return 1;}}

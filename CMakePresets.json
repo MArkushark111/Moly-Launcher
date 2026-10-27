@@ -1,0 +1,23 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "windows-qt-mingw", "displayName": "Windows · installed Qt 6.11.2 / MinGW",
+      "generator": "Ninja", "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.11.2/mingw_64",
+        "CMAKE_CXX_COMPILER": "C:/Qt/Tools/mingw1310_64/bin/g++.exe",
+        "CMAKE_MAKE_PROGRAM": "C:/Qt/Tools/Ninja/ninja.exe"
+      },
+      "environment": {"PATH": "C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.11.2/mingw_64/bin;$penv{PATH}"}
+    },
+    {
+      "name": "windows-msvc", "displayName": "Windows · MSVC (requires matching Qt MSVC kit)",
+      "generator": "Ninja", "binaryDir": "${sourceDir}/build-msvc",
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Release", "CMAKE_PREFIX_PATH": "$env{QT_MSVC_PATH}"}
+    }
+  ],
+  "buildPresets": [{"name": "windows", "configurePreset": "windows-qt-mingw"}],
+  "testPresets": [{"name": "windows", "configurePreset": "windows-qt-mingw", "output": {"outputOnFailure": true}}]
+}

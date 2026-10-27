@@ -1,0 +1,96 @@
+{
+  "origin": "Official Minecraft Java 1.20.1 client assets, downloaded using Mojang version metadata.",
+  "copyright": "Minecraft default skin textures are Mojang/Microsoft assets, not original Moly artwork.",
+  "files": [
+    {
+      "file": "wide/steve.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/wide/steve.png",
+      "sha256": "090da8d92c9f54fcbea87e6a2fb94125604a5a92a9ed6a52c10ee61c3b84bb79"
+    },
+    {
+      "file": "wide/alex.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/wide/alex.png",
+      "sha256": "d9736fc12f925e81c05ec8ac240b4d0f9bba29a30002ca79508621c8be2e0025"
+    },
+    {
+      "file": "wide/ari.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/wide/ari.png",
+      "sha256": "86edc2e9cea05d72afc9103ab82a6f95e0ac03ff6ea9821a039ca9f2bac69c7b"
+    },
+    {
+      "file": "wide/efe.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/wide/efe.png",
+      "sha256": "f89933431a0a9a7984c899f9d09d263295d2aa6d96ebcb4f07e982a4b3532c50"
+    },
+    {
+      "file": "wide/kai.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/wide/kai.png",
+      "sha256": "fbc1b7f3ce8017f0cdb5c5075e05823dc8a0af244f6e1c4d1dbfe866eaaa39ff"
+    },
+    {
+      "file": "wide/makena.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/wide/makena.png",
+      "sha256": "f1c59b5f04f96cf4b8b6c376c4efb5fd78fa80c66399b0cd571fef59eb8f5cf5"
+    },
+    {
+      "file": "wide/noor.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/wide/noor.png",
+      "sha256": "4d27a3a0d1bcdb8a428bb6392f923718570783b7090d6eb3ee932900030c258e"
+    },
+    {
+      "file": "wide/sunny.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/wide/sunny.png",
+      "sha256": "01c42b3b207538cfc73509d3180eb0db77c3e4c7e5e5534b3b1045540a03df1f"
+    },
+    {
+      "file": "wide/zuri.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/wide/zuri.png",
+      "sha256": "d8bc1c860f09d0768ca4d1c4817bb5ea41a8382592c63e073439dd4a437f6053"
+    },
+    {
+      "file": "slim/steve.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/slim/steve.png",
+      "sha256": "294d452907a07223ae09059a910665f69add66d09fb38782b911f3df73f4c5f9"
+    },
+    {
+      "file": "slim/alex.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/slim/alex.png",
+      "sha256": "052f3084767df1d22b45850ca9668d7263106b619c79f932f539cd314f93a0fd"
+    },
+    {
+      "file": "slim/ari.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/slim/ari.png",
+      "sha256": "14ee1f2fe0190f2cd78450b3afb17b0c9a99098acdf0de3ee6baf858dbbbbb80"
+    },
+    {
+      "file": "slim/efe.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/slim/efe.png",
+      "sha256": "66588bb0adfcb8d6e7332fd5a6616c5855c554b1ea4784945dc9b4ce8c9270db"
+    },
+    {
+      "file": "slim/kai.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/slim/kai.png",
+      "sha256": "8f45f08dab7e34422bb9ef82deb0f5d55fec2554e8573609f8b8d85a878314a8"
+    },
+    {
+      "file": "slim/makena.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/slim/makena.png",
+      "sha256": "8d06d55f9ffd5fca311bc78deab3793f597b0152d7173a49e66f37f5e9fa5be5"
+    },
+    {
+      "file": "slim/noor.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/slim/noor.png",
+      "sha256": "a8bfcfbcfc85677e9d9092cf3759894ba102bece449af2e400daed42cb705f06"
+    },
+    {
+      "file": "slim/sunny.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/slim/sunny.png",
+      "sha256": "e3e5a983c499886be2c6b173a65fbb3d0266e63e1ba33df2293c984c650fb748"
+    },
+    {
+      "file": "slim/zuri.png",
+      "minecraftClientEntry": "assets/minecraft/textures/entity/player/slim/zuri.png",
+      "sha256": "e1158f886660356b7932b97080745e4f04e0d25bf0aa9505795cae5bc2bb337d"
+    }
+  ]
+}

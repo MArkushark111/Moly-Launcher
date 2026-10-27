@@ -1,0 +1,7 @@
+Minecraft default skin textures
+
+Steve, Alex, Ari, Efe, Kai, Makena, Noor, Sunny, and Zuri textures are Mojang/Microsoft Minecraft assets.
+Source: verified Minecraft Java 1.20.1 client, assets/minecraft/textures/entity/player/{wide,slim}/.
+Client SHA-1: 0c3ec587af28e5a785c0b4a7b8a30f9a8f78f838
+Character overview: https://www.minecraft.net/en-us/article/introducing-new-default-skins
+These textures are not original Moly artwork and are not covered by licenses for the Moly source code.

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <mask id="mCarve">
+      <rect width="512" height="512" fill="#fff"/>
+      <path d="M186 338V228l70 74 70-74v110" fill="none" stroke="#000" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <path d="M256 52c25 27 138 172 138 260a138 138 0 0 1-276 0c0-88 113-233 138-260Z"
+        fill="#ffffff" mask="url(#mCarve)"/>
+</svg>
