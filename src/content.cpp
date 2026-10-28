@@ -226,14 +226,13 @@ QJsonArray Content::versions(const QJsonObject &project, const QJsonObject &inst
         }
         for (auto value : net.json(url).array()) {
             auto version = value.toObject();
-            if (version["version_type"] != "release")
-                continue;
             if (type == "mod" && !filter.isEmpty() &&
                 !version["loaders"].toArray().contains(filter["loader"].toString().toLower()))
                 continue;
             result.append(QJsonObject{{"id", version["id"]},
                                       {"name", version["version_number"]},
-                                      {"label", version["version_number"]},
+                                      {"label", version["version_number"].toString()+" · "+version["version_type"].toString()},
+                                      {"channel", version["version_type"]},
                                       {"published", version["date_published"]}});
             if (result.size() >= 60)
                 break;
@@ -255,14 +254,31 @@ QJsonArray Content::versions(const QJsonObject &project, const QJsonObject &inst
         }
         for (auto value : net.json(url, {}, {{"x-api-key", key.toUtf8()}}).object()["data"].toArray()) {
             auto version = value.toObject();
-            if (version["releaseType"].toInt() != 1)
-                continue;
             result.append(QJsonObject{{"id", QString::number(qint64(version["id"].toDouble()))},
                                       {"name", version["displayName"]},
-                                      {"label", version["displayName"]},
+                                      {"label", version["displayName"].toString()+" · "+QStringList{"release","beta","alpha"}.value(version["releaseType"].toInt()-1,"release")},
+                                      {"channel", QStringList{"release","beta","alpha"}.value(version["releaseType"].toInt()-1,"release")},
                                       {"published", version["fileDate"]}});
         }
     }
+    const auto currentId=project["versionId"].toString();bool includesCurrent=false;
+    for(auto value:result)if(value.toObject()["id"]==currentId)includesCurrent=true;
+    if(!currentId.isEmpty()&&!includesCurrent)try {
+        if(provider=="Modrinth") {
+            const auto version=net.json("https://api.modrinth.com/v2/version/"+encoded(currentId)).object();
+            if(version["project_id"]==project["projectId"]&&(filter.isEmpty()||version["game_versions"].toArray().contains(filter["version"]))&&(type!="mod"||filter.isEmpty()||version["loaders"].toArray().contains(filter["loader"].toString().toLower())))
+                result.append(QJsonObject{{"id",version["id"]},{"name",version["version_number"]},{"label",version["version_number"].toString()+" · "+version["version_type"].toString()},{"channel",version["version_type"]},{"published",version["date_published"]}});
+        }else if(provider=="CurseForge"&&!key.isEmpty()) {
+            const auto version=net.json("https://api.curseforge.com/v1/mods/"+encoded(project["projectId"].toString())+"/files/"+encoded(currentId),{},{{"x-api-key",key.toUtf8()}}).object()["data"].toObject();
+            if(filter.isEmpty()||version["gameVersions"].toArray().contains(filter["version"])) {
+                const auto channel=QStringList{"release","beta","alpha"}.value(version["releaseType"].toInt()-1,"release");
+                result.append(QJsonObject{{"id",currentId},{"name",version["displayName"]},{"label",version["displayName"].toString()+" · "+channel},{"channel",channel},{"published",version["fileDate"]}});
+            }
+        }
+    }catch(const std::exception &){net.ctx.check();} // Delisted current versions must not hide other choices.
+    QList<QJsonObject> sorted;for(auto value:result)sorted.append(value.toObject());
+    std::stable_sort(sorted.begin(),sorted.end(),[](const auto&a,const auto&b){return a["published"].toString()>b["published"].toString();});
+    result={};for(const auto &entry:sorted)result.append(entry);
     return result;
 }
 QJsonObject Content::modrinthVersion(const QString &project, const QJsonObject &instance,
@@ -840,7 +856,7 @@ static QJsonObject embeddedModMetadata(const QString &archive, const QString &ca
     const QFileInfo file(archive);
     if (file.isSymLink() || file.size() <= 0 || file.size() > 128 * 1024 * 1024)
         return {};
-    const auto identity = file.absoluteFilePath().toUtf8() + '\0' + QByteArray::number(file.size()) + '\0' +
+    const auto identity = QByteArray("artwork-v2") + file.absoluteFilePath().toUtf8() + '\0' + QByteArray::number(file.size()) + '\0' +
                           QByteArray::number(file.lastModified().toMSecsSinceEpoch());
     const auto cacheKey =
         QString::fromLatin1(QCryptographicHash::hash(identity, QCryptographicHash::Sha256).toHex());
@@ -875,6 +891,7 @@ static QJsonObject embeddedModMetadata(const QString &archive, const QString &ca
             return {};
         };
         QString icon;
+        if (!readSmall("pack.png",4*1024*1024).isEmpty()) icon="pack.png";
         const auto fabric = QJsonDocument::fromJson(readSmall("fabric.mod.json", 1024 * 1024)).object();
         if (!fabric.isEmpty()) {
             metadata["title"] = fabric["name"];
@@ -976,8 +993,9 @@ QJsonArray Content::files(const QJsonObject &instance, const QString &type) {
                 break;
             }
         }
-        if (type == "mod" && (item["icon"].toString().isEmpty() || item["title"].toString().isEmpty() ||
-                              item["author"].toString().isEmpty())) {
+        item["type"] = type;
+        if (item["icon"].toString().isEmpty() || (type == "mod" && (item["title"].toString().isEmpty() ||
+                              item["author"].toString().isEmpty()))) {
             const auto embedded = embeddedModMetadata(f.absoluteFilePath(), root + "/cache/mod-logos");
             for (const auto &field : {"title", "icon", "author"})
                 if (item[field].toString().isEmpty() && !embedded[field].toString().isEmpty())

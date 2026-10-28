@@ -206,3 +206,12 @@ The pack-preparation check requires empty isolated storage, contacts Modrinth, a
 .\build-release\MolyLauncher.exe --data-dir .\test-data\ui-060 --verify-startup --capture-startup .\docs\screenshots\startup-060.png
 .\build-release\MolyLauncher.exe --data-dir .\test-data\ui-060 --dialog import --import-source "Fast Client" --screenshot .\docs\screenshots\fast-import-060.png
 ```
+
+
+## 0.7.0 checks
+
+The deterministic suites cover private-address presence redaction and local Discord IPC handshake/activity/clearing against a mock named pipe, shortcut persistence/reorder/hide/reset without changing servers.dat, cross-client default-root isolation, pack.png extraction, and restoring a different-filename version replacement. Use isolated storage for UI and live content checks.
+
+The `--dialog account-chooser`, `--dialog server`, `--dialog browser`, and `--dialog versions` previews expose the new UI. The browser capture targets the secondary window. Identification uses Modrinth exact SHA-1 matches; unavailable or unknown local projects remain local. Discord presence reports navigation and the game/server launched by Moly, not in-game server changes. Live Microsoft authentication remains unverified until Moly has an approved registration.
+
+Recorded 0.7.0 live checks: the dedicated one-click browser installed Iris and its dependency with no confirmation modal, then displayed Installed; Discover's version switch stayed idle until Confirm; a live Iris install/upgrade/downgrade kept exactly one version per project, verified installed checksums, and was identified again by hashes after clearing its tracking manifest. Test files were isolated from the user's instances. Warning/error colors and literal log markup were inspected in the rendered virtualized log view. No new full Minecraft session or Microsoft sign-in is claimed.

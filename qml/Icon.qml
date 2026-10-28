@@ -48,6 +48,8 @@ Canvas {
         case "trash": line([3,6,21,6]);line([9,6,9,3,15,3,15,6]);line([5,6,6,21,18,21,19,6]);line([10,10,10,17]);line([14,10,14,17]);break
         case "refresh": c.beginPath();c.arc(12,12,8,0.5,5.5);c.stroke();line([20,3,20,9,14,9]);break
         case "external": line([14,3,21,3,21,10]);line([11,13,21,3]);line([10,3,3,3,3,21,21,21,21,14]);break
+        case "sparkle": line([12,2,15,9,22,12,15,15,12,22,9,15,2,12,9,9,12,2]);break
+        case "flask": line([8,3,16,3]);line([10,3,10,9,4,19,5,21,19,21,20,19,14,9,14,3]);line([7,15,17,15]);break
         case "clock": circle(12,12,9);line([12,6,12,12,16,14]);break
         default: line([3,7,12,2,21,7,21,17,12,22,3,17,3,7,12,12,21,7]);line([12,12,12,22]);break
         }

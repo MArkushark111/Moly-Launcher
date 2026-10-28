@@ -7,18 +7,46 @@
 #include <QUrl>
 #include <QPainter>
 #include <QPainterPath>
+#include <QCoreApplication>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QCache>
+#include <memory>
+
+namespace {
+QCache<QString,QImage> coverCache(32*1024);
+QNetworkAccessManager *coverNetwork(){static QPointer<QNetworkAccessManager> manager;if(!manager)manager=new QNetworkAccessManager(QCoreApplication::instance());return manager;}
+}
 
 ArtworkView::ArtworkView(QQuickItem *parent):QQuickPaintedItem(parent),movie_(this){
     setAntialiasing(true);movie_.setCacheMode(QMovie::CacheNone);
     connect(&movie_,&QMovie::frameChanged,this,[this]{update();});
     connect(this,&QQuickItem::visibleChanged,this,[this]{if(animated_&&!movie_.fileName().isEmpty()&&movie_.isValid())movie_.setPaused(!isVisible());});
 }
+ArtworkView::~ArtworkView(){if(pendingReply_){pendingReply_->disconnect(this);pendingReply_->abort();pendingReply_->deleteLater();}}
 void ArtworkView::setSource(const QUrl &url){if(source_==url)return;source_=url;reload();emit appearanceChanged();}
 void ArtworkView::setRadius(qreal value){radius_=qMax(0.0,value);update();emit appearanceChanged();}
 void ArtworkView::setShade(qreal value){shade_=qBound(0.0,value,1.0);update();emit appearanceChanged();}
 void ArtworkView::setAnimated(bool value){if(animated_==value)return;animated_=value;reload();emit appearanceChanged();}
 void ArtworkView::reload(){
+    if(pendingReply_){pendingReply_->disconnect(this);pendingReply_->abort();pendingReply_->deleteLater();pendingReply_=nullptr;}
     movie_.stop();movie_.setFileName({});still_={};
+    if(source_.scheme()=="https"&&!source_.host().isEmpty()&&source_.userInfo().isEmpty()) {
+        if(const auto cached=coverCache.object(source_.toString())){still_=*cached;update();return;}
+        QNetworkRequest request(source_);request.setTransferTimeout(15000);request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::NoLessSafeRedirectPolicy);
+        request.setHeader(QNetworkRequest::UserAgentHeader,"MArkushark111/Moly-Launcher/0.7.0");
+        auto reply=coverNetwork()->get(request);pendingReply_=reply;auto bytes=std::make_shared<QByteArray>();
+        connect(reply,&QNetworkReply::readyRead,this,[reply,bytes]{if(bytes->size()+reply->bytesAvailable()>8*1024*1024){reply->abort();return;}bytes->append(reply->readAll());});
+        connect(reply,&QNetworkReply::finished,this,[this,reply,bytes]{
+            if(pendingReply_!=reply){reply->deleteLater();return;}pendingReply_=nullptr;
+            if(reply->error()==QNetworkReply::NoError&&bytes->size()+reply->bytesAvailable()<=8*1024*1024){
+                bytes->append(reply->readAll());QBuffer buffer(bytes.get());buffer.open(QIODevice::ReadOnly);QImageReader reader(&buffer);const auto size=reader.size();
+                if(size.isValid()&&size.width()<=8192&&size.height()<=8192&&qint64(size.width())*size.height()<=16*1024*1024){reader.setAutoTransform(true);reader.setScaledSize(size.scaled(512,512,Qt::KeepAspectRatio));still_=reader.read();if(!still_.isNull())coverCache.insert(source_.toString(),new QImage(still_),qMax(1,int(still_.sizeInBytes()/1024)));}
+            }
+            reply->deleteLater();update();emit appearanceChanged();
+        });
+        update();return;
+    }
     if(source_.scheme()=="data") {
         const auto value=source_.toString();const QString prefix="data:image/png;base64,";
         if(value.startsWith(prefix)&&value.size()<=128*1024) {

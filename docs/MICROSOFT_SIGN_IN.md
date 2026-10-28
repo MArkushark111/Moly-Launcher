@@ -2,7 +2,7 @@
 
 Microsoft sign-in has two separate pieces: **the launcher is registered once**, then **players sign in through Microsoft's website**. Players should not normally need to create a Microsoft developer app.
 
-This preview has no Moly-owned application ID included. The Accounts screen now explains that and provides a four-step setup guide instead of sending you to an unexplained ID field. An ID is a public identifier for the launcher, not your password or a client secret.
+This preview has no Moly-owned application ID included. The Accounts screen and first-run chooser offer Microsoft or local accounts. Application registration is an owner/build task; players are never asked for an ID. An ID is a public identifier for the launcher, not your password or a client secret.
 
 ## If you just want to play
 
@@ -32,7 +32,14 @@ The legacy [Minecraft API support article](https://help.minecraft.net/hc/en-us/a
 
 ### 4. Add the ID to Moly
 
-Open **Accounts → Set up Microsoft sign-in**, reach the final step, and paste the ID. Moly accepts the usual UUID shape, such as `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. Select **Save ID**, or **Save & sign in** to explicitly start the browser flow immediately.
+Supply Moly's registered public ID when configuring the launcher build:
+
+```powershell
+cmake -S . -B build-release -DMOLY_MICROSOFT_CLIENT_ID=YOUR_PUBLIC_APPLICATION_ID
+cmake --build build-release --target MolyLauncher
+```
+
+For development, `MOLY_MICROSOFT_CLIENT_ID` in the process environment overrides the included ID. Existing configured development settings remain supported. A distributed build should include Moly's approved ID so players only select **Sign in with Microsoft**.
 
 The ID is saved in the existing settings store. Login tokens, when acquired successfully, stay in Windows Credential Manager. Moly never requests the Microsoft password in its own interface.
 
@@ -44,4 +51,4 @@ The ID is saved in the existing settings store. Login tokens, when acquired succ
 - **No Java Edition entitlement:** use the Microsoft account that owns or currently has access to Minecraft Java Edition.
 - **Expired browser code:** cancel and start sign-in again.
 
-The setup guide validates the ID's shape and saves it; it cannot validate Minecraft approval in advance. End-to-end Microsoft sign-in still needs a real authorized registration and a real account to verify.
+The launcher checks the configured ID’s shape; it cannot validate Minecraft approval in advance. End-to-end Microsoft sign-in still needs a real authorized registration and a real account to verify.

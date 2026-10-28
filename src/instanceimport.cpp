@@ -160,11 +160,11 @@ QStringList InstanceImport::defaultRoots(const QString &provider) {
     if(provider=="CurseForge")return {home+"/curseforge/minecraft/Instances",home+"/Documents/Curse/Minecraft/Instances",home+"/Documents/CurseForge/Minecraft/Instances"};
     if(provider=="ATLauncher")return {roaming+"/ATLauncher/instances",local+"/ATLauncher/instances",home+"/ATLauncher/instances"};
     if(provider=="Lunar Client")return {home+"/.lunarclient/profiles",home+"/.lunarclient/profiles/modpacks"};
-    if(provider=="Dawn Client")return {roaming+"/Dawn",roaming+"/DawnClient",home+"/.dawn",home+"/.feather",roaming+"/.feather"};
+    if(provider=="Dawn Client")return {roaming+"/Dawn",roaming+"/DawnClient",home+"/.dawn"};
     if(provider=="Fast Client")return {roaming+"/FastClient",roaming+"/.fastclient/profiles"};
     if(provider=="NoRisk Client")return {roaming+"/norisk/NoRiskClientV3",roaming+"/noriskclient",roaming+"/NoRiskClient"};
-    if(provider=="Badlion Client")return {roaming+"/Badlion Client",roaming+"/BadlionClient",home+"/.badlionclient",roaming+"/.minecraft"};
-    if(provider=="LabyMod")return {roaming+"/LabyMod",roaming+"/LabyMod Launcher",home+"/.laby",roaming+"/.minecraft"};
+    if(provider=="Badlion Client")return {roaming+"/Badlion Client",roaming+"/BadlionClient",home+"/.badlionclient"};
+    if(provider=="LabyMod")return {roaming+"/LabyMod",roaming+"/LabyMod Launcher",home+"/.laby"};
     if(provider=="Feather")return {home+"/.feather",roaming+"/.feather"};
     if(provider=="GDLauncher")return {roaming+"/gdlauncher_next",roaming+"/gdlauncher_carbon",roaming+"/GDLauncher",home+"/.gdlauncher"};
     if(provider=="Minecraft")return {roaming+"/.minecraft"};
@@ -234,7 +234,7 @@ QJsonArray InstanceImport::scan(const QString &provider,const QStringList &roots
     QString databaseError;
     for(const auto &root:roots) {
         context.check();if(!QFileInfo(root).isDir()||linked(QFileInfo(root)))continue;
-        if(QStringList{"Minecraft","Badlion Client","LabyMod","Feather"}.contains(provider)&&QFileInfo(root+"/launcher_profiles.json").isFile()) {
+        if(provider=="Minecraft"&&QFileInfo(root+"/launcher_profiles.json").isFile()) {
             const auto profiles=metadata(root+"/launcher_profiles.json")["profiles"].toObject();
             for(auto it=profiles.begin();it!=profiles.end();++it) {
                 const auto profile=it.value().toObject();auto game=profile["gameDir"].toString(root);

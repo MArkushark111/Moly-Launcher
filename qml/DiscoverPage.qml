@@ -4,6 +4,15 @@ import QtQuick.Layouts
 
 Item {
     id: page
+    property bool instantInstall: false
+    property string targetInstanceId: launcher.selectedId
+    readonly property var knownContent: launcher.installedContent
+    function installed(project) { return project.type!=="modpack" && knownContent.some(function(f){return f.provider===project.provider && f.projectId===project.projectId}) }
+    function install(project) {
+        if(installed(project))return
+        if(instantInstall && project.type!=="modpack")launcher.beginInstall(project,targetInstanceId,"",true)
+        else shell.installProject(project)
+    }
     property var shell
     property int categoryIndex: 0
     property bool searchPending: false
@@ -119,7 +128,7 @@ Item {
             ColumnLayout {
                 spacing: 4
                 Text {
-                    text: "Discover"
+                    text: page.instantInstall ? "Add to "+(launcher.selected.name||"instance") : "Discover"
                     color: Theme.text
                     font.family: Theme.fontFamily
                     font.pixelSize: 26
@@ -127,7 +136,7 @@ Item {
                     font.letterSpacing: -0.5
                 }
                 Text {
-                    text: "Browse Minecraft content from Modrinth and CurseForge."
+                    text: page.instantInstall ? "Compatible content · click Install to add it with required dependencies." : "Browse Minecraft content from Modrinth and CurseForge."
                     color: Theme.textSecondary
                     font.pixelSize: 12
                 }
@@ -457,15 +466,13 @@ Item {
                                 }
                                 contentItem: Item {
                                     clip: true
-                                    Image {
+                                    ArtworkView {
+                                        id:coverImage
                                         anchors.fill: parent
+                                        radius:16;shade:0;animated:false
                                         source: cardItem.imagesRequested ? modelData.thumbnail || "" : ""
-                                        fillMode: Image.PreserveAspectCrop
-                                        asynchronous: true
-                                        cache: true
-                                        sourceSize.width: Math.ceil(projectGrid.cellWidth * 1.5)
                                         visible: !!modelData.thumbnail
-                                        opacity: status === Image.Ready ? 1 : 0
+                                        opacity: ready ? 1 : 0
                                         Behavior on opacity {
                                             NumberAnimation {
                                                 duration: Theme.motion ? 260 : 0
@@ -473,7 +480,9 @@ Item {
                                         }
                                     }
                                     Rectangle {
-                                        anchors.fill:parent;visible:!modelData.thumbnail;color:Theme.surface2
+                                        anchors.fill:parent;radius:16;visible:!coverImage.ready;color:Theme.accentSoft
+                                        gradient: Gradient {GradientStop{position:0;color:Qt.rgba(Theme.accent.r,Theme.accent.g,Theme.accent.b,0.17)}GradientStop{position:1;color:Theme.surface}}
+                                        Icon {anchors.right:parent.right;anchors.rightMargin:22;anchors.verticalCenter:parent.verticalCenter;name:modelData.type==="shader"?"sparkle":modelData.type==="resourcepack"?"file":"box";size:54;color:Qt.rgba(Theme.accent.r,Theme.accent.g,Theme.accent.b,0.22)}
                                     }
                                     Rectangle {
                                         anchors.bottom: parent.bottom
@@ -539,12 +548,13 @@ Item {
                                         Layout.fillWidth: true
                                     }
                                     MButton {
-                                        text: "Install"
-                                        kind: "primary"
+                                        objectName:"installProject-"+modelData.projectId
+                                        text: page.installed(modelData) ? "Installed" : "Install"
+                                        kind: page.installed(modelData) ? "secondary" : "primary"
                                         implicitHeight: 30
-                                        implicitWidth: 70
-                                        enabled: !launcher.busy
-                                        onClicked: shell.installProject(modelData)
+                                        implicitWidth: 84
+                                        enabled: !launcher.busy && !page.installed(modelData)
+                                        onClicked: page.install(modelData)
                                     }
                                 }
                             }
@@ -829,14 +839,14 @@ Item {
                     onClicked: launcher.openLink(page.detailProject.page || "")
                 }
                 MButton {
-                    text: "Install"
-                    kind: "primary"
+                    text: page.installed(page.detailProject)?"Installed":"Install"
+                    kind: page.installed(page.detailProject)?"secondary":"primary"
                     Layout.fillWidth: true
                     implicitHeight: 36
-                    enabled: !launcher.busy
+                    enabled: !launcher.busy&&!page.installed(page.detailProject)
                     onClicked: {
                         detailDrawer.close();
-                        shell.installProject(page.detailProject);
+                        page.install(page.detailProject);
                     }
                 }
             }

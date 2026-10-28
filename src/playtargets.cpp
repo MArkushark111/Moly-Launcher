@@ -23,6 +23,7 @@
 #include <QTcpSocket>
 #include <QTimer>
 #include <QUrl>
+#include <QUuid>
 #include <QtConcurrent>
 #include <QtEndian>
 #include <QtZlib/zlib.h>
@@ -382,15 +383,24 @@ QVariantList savedPlayTargets(const QString &root,const QStringList &requestedId
     return items;
 }
 
-PlayTargets::PlayTargets(QString root,QObject *parent):QObject(parent),root_(std::move(root)) {}
+PlayTargets::PlayTargets(QString root,QObject *parent):QObject(parent),root_(std::move(root)) {try{preferences_=readObject(root_+"/play-targets.json",true);}catch(const std::exception &){}}
 PlayTargets::~PlayTargets(){
     cancelPings();
     for(auto *watcher:findChildren<QFutureWatcherBase*>())watcher->waitForFinished();
 }
 QVariantList PlayTargets::items() const {
-    if(selected_.isEmpty())return allItems_;
-    QVariantList out;for(const auto &v:allItems_)if(v.toMap()["instanceId"]==selected_)out.append(v);return out;
+    QVariantList out;const auto hidden=preferences_["hidden"].toArray(),order=preferences_["order"].toArray();const auto overrides=preferences_["overrides"].toObject();
+    for(const auto &v:allItems_) {
+        auto row=v.toMap();if(!selected_.isEmpty()&&row["instanceId"]!=selected_)continue;
+        const auto id=row["id"].toString();if(hidden.contains(id))continue;
+        const auto replacement=overrides[id].toObject();
+        if(replacement.contains("name"))row["name"]=replacement["name"].toString();
+        out.append(row);
+    }
+    auto rank=[&](const QVariant &value){const auto id=value.toMap()["id"].toString();for(qsizetype i=0;i<order.size();++i)if(order[i]==id)return int(i);return int(order.size());};
+    std::stable_sort(out.begin(),out.end(),[&](const QVariant&a,const QVariant&b){return rank(a)<rank(b);});return out;
 }
+
 void PlayTargets::setDataRoot(const QString &root){if(root_==root)return;root_=root;emit configurationChanged();refresh();}
 void PlayTargets::setSelectedInstanceId(const QString &id){if(selected_==id)return;selected_=id;emit configurationChanged();emit itemsChanged();}
 void PlayTargets::setInstanceIds(const QStringList &ids){if(instanceIds_==ids)return;instanceIds_=ids;emit configurationChanged();refresh();}
@@ -398,13 +408,18 @@ void PlayTargets::setPingEnabled(bool enabled){if(pingEnabled_==enabled)return;p
 void PlayTargets::cancelPings(){++pingGeneration_;if(pingGroup_){delete pingGroup_;pingGroup_=nullptr;}pendingPings_=0;emit checkingStatusChanged();}
 void PlayTargets::refresh(){
     const auto ticket=++generation_;cancelPings();loading_=true;error_.clear();emit loadingChanged();emit errorChanged();
-    auto watcher=new QFutureWatcher<QVariantList>(this);const auto root=root_;const auto ids=instanceIds_;
+    auto watcher=new QFutureWatcher<QVariantList>(this);const auto root=root_;const auto ids=instanceIds_;const auto custom=preferences_["servers"].toArray();
     connect(watcher,&QFutureWatcher<QVariantList>::finished,this,[this,watcher,ticket]{
         if(ticket!=generation_){watcher->deleteLater();return;}
         try{allItems_=watcher->result();for(auto &value:allItems_){auto row=value.toMap();const auto old=serverSnapshots_.value(row["address"].toString());if(row["type"]=="server"){if(row["iconUrl"].toString().isEmpty())row["iconUrl"]=old["iconUrl"];row["motd"]=old["motd"];}value=row;}}catch(const std::exception &e){error_=QString::fromUtf8(e.what());allItems_.clear();emit errorChanged();emit errorOccurred(error_);}
         loading_=false;emit loadingChanged();emit itemsChanged();watcher->deleteLater();if(pingEnabled_)refreshStatus();
     });
-    watcher->setFuture(QtConcurrent::run([root,ids]{return savedPlayTargets(root,ids);}));
+    watcher->setFuture(QtConcurrent::run([root,ids,custom]{
+        auto rows=savedPlayTargets(root,ids);
+        for(auto value:custom){auto row=value.toObject().toVariantMap();const auto instanceId=row["instanceId"].toString();if(!ids.isEmpty()&&!ids.contains(instanceId))continue;
+            try{const auto instance=readObject(safePath(root+"/instances",instanceId)+"/instance.json");if(instance["id"]!=instanceId)continue;row["instanceName"]=instance["name"].toString();row["minecraftVersion"]=instance["version"].toString();row["loader"]=instance["loader"].toString();row["type"]="server";row["value"]=row["address"];row["status"]="unknown";row["iconUrl"]=fileImage(serverIconPath(root,row["address"].toString()));rows.append(row);}catch(const std::exception &){}
+        }return rows;
+    }));
 }
 void PlayTargets::refreshStatus(){
     cancelPings();if(!pingEnabled_)return;
@@ -480,4 +495,37 @@ bool PlayTargets::setWorldIcon(const QString &instanceId,const QString &worldFol
 void PlayTargets::activate(const QVariantMap &entry){
     const auto id=entry["id"].toString();for(const auto &item:allItems_){const auto row=item.toMap();if(row["id"]==id){emit targetChosen(row["instanceId"].toString(),row["type"].toString(),row["value"].toString());return;}}
 }
+}
+
+namespace moly {
+bool PlayTargets::savePreferences(const QJsonObject &next) {
+    try{writeObject(root_+"/play-targets.json",next);preferences_=next;emit itemsChanged();return true;}catch(const std::exception &e){emit errorOccurred(QString::fromUtf8(e.what()));return false;}
+}
+bool PlayTargets::saveServer(const QVariantMap &entry) {
+    const auto instanceId=entry.value("instanceId").toString(),address=entry.value("address").toString().trimmed(),name=entry.value("name").toString().trimmed();
+    try{if(readObject(safePath(root_+"/instances",instanceId)+"/instance.json")["id"]!=instanceId)throw Error("Choose an existing instance.");}catch(const std::exception &e){emit errorOccurred(QString::fromUtf8(e.what()));return false;}
+    if(parseMinecraftAddress(address).isEmpty()||name.isEmpty()||name.size()>100){emit errorOccurred("Enter a server name and a valid Minecraft address.");return false;}
+    auto next=preferences_;auto servers=next["servers"].toArray();const auto existing=entry.value("id").toString();
+    if(!existing.isEmpty()&&!existing.startsWith("custom/")){
+        QVariantMap original;for(auto value:allItems_)if(value.toMap()["id"]==existing)original=value.toMap();
+        if(original.isEmpty())return false;
+        if(original["address"].toString()!=address){ // Replace only this shortcut; Minecraft's own list stays intact.
+            auto hidden=next["hidden"].toArray();if(!hidden.contains(existing))hidden.append(existing);next["hidden"]=hidden;
+        }else{auto overrides=next["overrides"].toObject();overrides[existing]=QJsonObject{{"name",name}};next["overrides"]=overrides;return savePreferences(next);}
+    }
+    QString id=existing.startsWith("custom/")?existing:"custom/"+QUuid::createUuid().toString(QUuid::WithoutBraces);
+    for(qsizetype i=servers.size()-1;i>=0;--i)if(servers[i].toObject()["id"]==id)servers.removeAt(i);
+    if(servers.size()>=256){emit errorOccurred("The Moly server shortcut limit has been reached.");return false;}
+    servers.append(QJsonObject{{"id",id},{"name",name},{"address",address},{"instanceId",instanceId}});next["servers"]=servers;
+    if(!savePreferences(next))return false;refresh();return true;
+}
+void PlayTargets::hideTarget(const QString &id){bool found=false;for(auto value:allItems_)if(value.toMap()["id"]==id)found=true;if(!found)return;auto next=preferences_;auto hidden=next["hidden"].toArray();if(!hidden.contains(id))hidden.append(id);next["hidden"]=hidden;savePreferences(next);}
+void PlayTargets::moveTarget(const QString &id,const QString &beforeId,bool after){
+    auto rows=items();QStringList order;for(auto value:rows)order.append(value.toMap()["id"].toString());if(id==beforeId||!order.contains(id)||!order.contains(beforeId))return;
+    order.removeAll(id);order.insert(order.indexOf(beforeId)+(after?1:0),id);auto next=preferences_;auto saved=next["order"].toArray();
+    // Preserve ordering in other instances while changing the visible list.
+    for(qsizetype i=saved.size()-1;i>=0;--i)if(order.contains(saved[i].toString()))saved.removeAt(i);
+    for(const auto &key:order)saved.append(key);next["order"]=saved;savePreferences(next);
+}
+void PlayTargets::resetLayout(){auto next=preferences_;next["hidden"]=QJsonArray{};next["order"]=QJsonArray{};savePreferences(next);}
 }

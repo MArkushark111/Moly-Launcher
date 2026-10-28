@@ -1,6 +1,7 @@
 #include <QtTest>
 #include <QTemporaryDir>
 #include <QJsonDocument>
+#include <QUrl>
 #include <private/qzipwriter_p.h>
 #include "core.h"
 #include "content.h"
@@ -61,6 +62,21 @@ private slots:
         content.restore(instance,backups.first());
         QCOMPARE(fileHash(base+"/game/mods/remove.jar"),originalHash);
         QCOMPARE(readObject(base+"/content.json"),manifest);
+    }
+    void localPackArtworkIsExtracted() {
+        QTemporaryDir root;const auto bytes=QByteArray::fromBase64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGv8AAAAASUVORK5CYII=");
+        for(const auto &type:QStringList{"resourcepack","shader"}) {
+            const auto folder=contentFolder(type);QDir().mkpath(root.path()+"/instances/test/game/"+folder);const auto path=root.path()+"/instances/test/game/"+folder+"/example.zip";
+            {QZipWriter writer(path);writer.addFile("pack.png",bytes);writer.close();}
+            const auto rows=Content(root.path()).files({{"id","test"}},type);QCOMPARE(rows.size(),1);const auto icon=QUrl(rows[0].toObject()["icon"].toString()).toLocalFile();QVERIFY(!icon.isEmpty());QFile file(icon);QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(file.readAll(),bytes);
+        }
+    }
+    void versionReplacementRemovesOldJarAndCanRestoreIt() {
+        QTemporaryDir root;const auto base=root.path()+"/instances/test";const auto source=root.path()+"/new.jar";writeBytes(source,"new-version");writeBytes(base+"/game/mods/old.jar.disabled","old-version");
+        writeObject(base+"/content.json",{{"files",QJsonArray{QJsonObject{{"path","mods/old.jar.disabled"},{"provider","Modrinth"},{"projectId","fixture"},{"versionId","v1"}}}}});
+        Content content(root.path());content.apply({{"id","test"}},{{"files",QJsonArray{QJsonObject{{"path","mods/new.jar"},{"provider","Modrinth"},{"projectId","fixture"},{"versionId","v2"},{"local",source},{"hash",fileHash(source)},{"algorithm","sha1"}}}}});
+        QVERIFY(!QFileInfo::exists(base+"/game/mods/old.jar.disabled"));QVERIFY(QFileInfo::exists(base+"/game/mods/new.jar"));
+        const auto backups=QDir(base+"/backups").entryList(QDir::Dirs|QDir::NoDotAndDotDot);QCOMPARE(backups.size(),1);content.restore({{"id","test"}},backups.first());QVERIFY(QFileInfo::exists(base+"/game/mods/old.jar.disabled"));QVERIFY(!QFileInfo::exists(base+"/game/mods/new.jar"));
     }
     void cancelledContent(){QTemporaryDir d;auto source=d.path()+"/s.jar";writeBytes(source,"new");writeBytes(d.path()+"/instances/test/game/mods/test.jar","original");std::atomic_bool cancel=true;Content content(d.path(),{},Context{&cancel,{}});QVERIFY_EXCEPTION_THROWN(content.apply({{"id","test"}},{{"files",QJsonArray{QJsonObject{{"path","mods/test.jar"},{"local",source},{"hash",fileHash(source,"sha1")},{"algorithm","sha1"}}}}}),Error);QFile f(d.path()+"/instances/test/game/mods/test.jar");QVERIFY(f.open(QIODevice::ReadOnly));QCOMPARE(f.readAll(),QByteArray("original"));}
 };

@@ -3,6 +3,8 @@
 #include <QQuickPaintedItem>
 #include <QMovie>
 #include <QUrl>
+#include <QPointer>
+#include <QNetworkReply>
 
 class ArtworkView : public QQuickPaintedItem {
     Q_OBJECT
@@ -13,6 +15,7 @@ class ArtworkView : public QQuickPaintedItem {
     Q_PROPERTY(bool ready READ ready NOTIFY appearanceChanged)
 public:
     explicit ArtworkView(QQuickItem *parent=nullptr);
+    ~ArtworkView() override;
     QUrl source()const{return source_;} qreal radius()const{return radius_;} qreal shade()const{return shade_;} bool animated()const{return animated_;}
     bool ready()const{return !still_.isNull()||(!movie_.fileName().isEmpty()&&movie_.isValid());}
     void setSource(const QUrl &source);void setRadius(qreal value);void setShade(qreal value);void setAnimated(bool value);
@@ -21,6 +24,7 @@ signals:
     void appearanceChanged();
 private:
     QUrl source_;QMovie movie_;QImage still_;qreal radius_=17,shade_=0.5;bool animated_=true;
+    QPointer<QNetworkReply> pendingReply_;
     void reload();
 };
 

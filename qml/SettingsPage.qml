@@ -17,7 +17,7 @@ Item {
                 Text{text:"Appearance, game defaults, and connections.";color:Theme.textSecondary;font.pixelSize:13}
             }
             Item{Layout.fillWidth:true}
-            MButton{text:"Save settings";kind:"primary";enabled:!launcher.busy;onClicked:launcher.saveSettings({memoryMb:Math.round(ram.value),width:resWidth.value,height:resHeight.value,fullscreen:fullscreen.checked,reducedMotion:motion.checked,keepVisible:keepVisible.checked,launcherFullscreen:launcherFullscreen.checked,microsoftClientId:clientId.text.trim(),javaPath:javaPath.text.trim(),jvmArgs:jvmArgs.text.trim()})}
+            MButton{text:"Save settings";kind:"primary";enabled:!launcher.busy;onClicked:launcher.saveSettings({memoryMb:Math.round(ram.value),width:resWidth.value,height:resHeight.value,fullscreen:fullscreen.checked,reducedMotion:motion.checked,keepVisible:keepVisible.checked,launcherFullscreen:launcherFullscreen.checked,javaPath:javaPath.text.trim(),jvmArgs:jvmArgs.text.trim()})}
         }
         TabStrip { tabs:[{label:"Appearance",icon:"file"},{label:"Game",icon:"play"},{label:"Connections",icon:"accounts"},{label:"Advanced",icon:"settings"}];currentIndex:page.section;onActivated:function(index){page.section=index} }
         ScrollView{id:scroll;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth
@@ -27,6 +27,9 @@ Item {
                 Panel{visible:page.section===0;Layout.fillWidth:true
                     ColumnLayout{anchors.fill:parent;spacing:14
                         Text{text:"Appearance";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
+                        RowLayout{Layout.fillWidth:true;Text{text:"Show server descriptions";color:Theme.text;font.pixelSize:13;Layout.fillWidth:true}MSwitch{checked:launcher.settings.showServerMotd===true;onClicked:launcher.setUiPreferences({showServerMotd:checked})}}
+                        RowLayout{Layout.fillWidth:true;Text{text:"Show server addresses";color:Theme.text;font.pixelSize:13;Layout.fillWidth:true}MSwitch{checked:launcher.settings.showServerAddress!==false;onClicked:launcher.setUiPreferences({showServerAddress:checked})}}
+
                         Text{text:"Accent color";color:Theme.textSecondary;font.pixelSize:13}
                         RowLayout{Layout.fillWidth:true;spacing:10
                             Repeater{model:["#8b5cf6","#3b82f6","#22c55e","#f97316","#ef4444","#ec4899","#06b6d4","#a1a1aa"]
@@ -196,10 +199,14 @@ Item {
                 Panel{visible:page.section===2;Layout.fillWidth:true
                     ColumnLayout{anchors.fill:parent;spacing:12
                         Text{text:"Connections";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
-                        Text{text:"Microsoft application client ID";color:Theme.textSecondary;font.pixelSize:13}
-                        MField{id:clientId;Layout.fillWidth:true;text:page.initialSettings.microsoftClientId||"";placeholderText:"Your public-client application's ID"}
-                        Text{text:"Used for browser sign-in. The app must support personal accounts and public-client flows, with Minecraft API access.";color:Theme.textSecondary;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
-                        RowLayout{spacing:8;MButton{text:"App registration";iconName:"external";compact:true;onClicked:launcher.openLink("https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade")}MButton{text:"Minecraft API access";iconName:"external";compact:true;onClicked:launcher.openLink("https://help.minecraft.net/hc/en-us/articles/16254801392141")}}
+                        RowLayout{Layout.fillWidth:true;Text{text:"Microsoft account";color:Theme.text;font.pixelSize:13;Layout.fillWidth:true}MButton{text:"Choose account type";iconName:"accounts";onClicked:shell.showAccountChooser()}}
+                        Text{text:launcher.microsoftAvailable?"Browser sign-in is ready.":"Microsoft sign-in is waiting for Moly's application registration. Players do not need a client ID.";color:Theme.textMuted;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
+                        RowLayout{Layout.fillWidth:true;Text{text:"Show account chooser on startup";color:Theme.text;font.pixelSize:13;Layout.fillWidth:true}MSwitch{checked:launcher.settings.showAccountChooser===true;onClicked:launcher.setUiPreferences({showAccountChooser:checked})}}
+                        Rectangle{Layout.fillWidth:true;height:1;color:Theme.border}
+                        RowLayout{Layout.fillWidth:true;Text{text:"Discord Rich Presence";color:Theme.text;font.pixelSize:13;Layout.fillWidth:true}MSwitch{checked:launcher.settings.discordPresence!==false;onClicked:launcher.setUiPreferences({discordPresence:checked})}}
+                        Text{text:discordPresence.status; color:Theme.textMuted;font.pixelSize:12}
+                        RowLayout{Layout.fillWidth:true;Text{text:"Share public server address";color:Theme.text;font.pixelSize:13;Layout.fillWidth:true}MSwitch{checked:launcher.settings.discordShareServer!==false;onClicked:launcher.setUiPreferences({discordShareServer:checked})}}
+                        Text{text:"Numeric IPs, localhost and local network names appear as Private server. Presence reflects the server launched through Moly; switching servers inside Minecraft is not detected.";color:Theme.textMuted;font.pixelSize:11;wrapMode:Text.Wrap;Layout.fillWidth:true}
                         Rectangle{Layout.fillWidth:true;height:1;color:Theme.border;Layout.topMargin:4;Layout.bottomMargin:4}
                         RowLayout{Layout.fillWidth:true;Text{text:"CurseForge";color:Theme.textSecondary;font.pixelSize:13;Layout.fillWidth:true}Badge{text:launcher.curseConnected?"Connected":"Not connected";tint:Theme.textSecondary}}
                         Text{text:"Your existing CurseForge connection is managed securely by Windows. Modrinth needs no account.";color:Theme.textMuted;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}

@@ -53,6 +53,8 @@ class Launcher : public QObject {
     Q_PROPERTY(bool importScanning READ importScanning NOTIFY importScanChanged)
     Q_PROPERTY(QString importScanError READ importScanError NOTIFY importScanChanged)
     Q_PROPERTY(QStringList importSources READ importSources CONSTANT)
+    Q_PROPERTY(QVariantList installedContent READ installedContent NOTIFY changed)
+    Q_PROPERTY(bool microsoftAvailable READ microsoftAvailable NOTIFY changed)
   public:
     explicit Launcher(QString root, QObject *parent = nullptr);
     ~Launcher() override;
@@ -146,6 +148,10 @@ class Launcher : public QObject {
     bool importScanning() const { return localScanBusy; }
     QString importScanError() const { return localScanError; }
     QStringList importSources() const;
+    QVariantList installedContent() const;
+    bool microsoftAvailable() const;
+    Q_INVOKABLE void identifyContent();
+    Q_INVOKABLE QVariantMap presenceActivity(const QString &page, bool shareServer = true) const;
     Q_INVOKABLE void scanLocalInstances(const QString &provider, const QString &folder = {});
     Q_INVOKABLE void importLocalInstance(const QString &candidateId, const QVariantMap &overrides, bool includeWorlds = true);
     Q_INVOKABLE void moveInstance(const QString &id, const QString &beforeId, bool after = false);
@@ -264,6 +270,8 @@ class Launcher : public QObject {
     std::atomic_bool cancelled = false;
     QFutureWatcher<QJsonObject> watcher;
     QFutureWatcher<QJsonArray> iconWatcher;
+    QFutureWatcher<QJsonObject> identityWatcher;
+    std::atomic_bool identityCancelled = false;
     QFutureWatcher<QJsonObject> choicesWatcher;
     std::atomic_bool choicesCancelled = false;
     quint64 choicesGeneration = 0;
@@ -277,6 +285,7 @@ class Launcher : public QObject {
     std::function<void(QJsonObject)> retryDone;
     QString retryTitle;
     QMap<QString, QProcess *> processes;
+    QMap<QString,QJsonObject> processTargets;
     QMap<QString, QStringList> logLines;
     QMap<QString, QString> partialLines;
     QMap<QString, QStringList> processSecrets;

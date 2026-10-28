@@ -22,7 +22,7 @@ AbstractButton {
         clip: true
         ArcSpinner { visible: control.activeTask; x:12; anchors.verticalCenter:parent.verticalCenter; width:18;height:18 }
         Icon { visible: !control.activeTask; name:"download";size:16;x:12;anchors.verticalCenter:parent.verticalCenter;color:Theme.textSecondary }
-        Text { x:39; anchors.verticalCenter:parent.verticalCenter; width:Math.max(0,parent.width-x-12);text:control.activeTask?(launcher.downloadSpeed>0?(launcher.downloadSpeed/1048576).toFixed(1)+" MB/s · ":launcher.progress>=0?Math.round(launcher.progress*100)+"% · ":"")+control.taskTitle:"Tasks";elide:Text.ElideRight;color:Theme.text;font.family:Theme.fontFamily;font.pixelSize:11;verticalAlignment:Text.AlignVCenter }
+        Text { x:control.activeTask?39:43; anchors.verticalCenter:parent.verticalCenter; width:Math.max(0,parent.width-x-12);text:control.activeTask?(launcher.downloadSpeed>0?(launcher.downloadSpeed/1048576).toFixed(1)+" MB/s · ":launcher.progress>=0?Math.round(launcher.progress*100)+"% · ":"")+control.taskTitle:"Tasks";elide:Text.ElideRight;color:Theme.text;font.family:Theme.fontFamily;font.pixelSize:11;verticalAlignment:Text.AlignVCenter }
     }
 
 }

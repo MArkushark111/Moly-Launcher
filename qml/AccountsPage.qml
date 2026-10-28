@@ -5,27 +5,8 @@ import QtQuick.Layouts
 ScrollView {
     id: page
     property var shell
-    readonly property bool microsoftConfigured: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(launcher.settings.microsoftClientId || "")
-    clip: true
-    contentWidth: availableWidth
-
-    function openMicrosoftSetup() {
-        setupDialog.step = 0
-        setupClientId.text = launcher.settings.microsoftClientId || ""
-        setupDialog.open()
-    }
-    function saveMicrosoftClient(startSignIn) {
-        const value = setupClientId.text.trim().toLowerCase()
-        if (!setupClientId.acceptableInput || launcher.busy)
-            return
-        launcher.saveSettings({ microsoftClientId: value })
-        if ((launcher.settings.microsoftClientId || "").toLowerCase() !== value)
-            return
-        setupDialog.close()
-        if (startSignIn)
-            launcher.signIn()
-    }
-
+    readonly property bool microsoftConfigured: launcher.microsoftAvailable
+    clip:true;contentWidth:availableWidth
     ColumnLayout {
         width: page.availableWidth
         spacing: 16
@@ -36,6 +17,7 @@ ScrollView {
             spacing: 7
             Text { text: "Accounts"; color: Theme.text; font.family: Theme.fontFamily; font.pixelSize: 26; font.weight: Font.Bold }
             Text { text: "Microsoft accounts and local profiles."; color: Theme.textSecondary; font.pixelSize: 13 }
+            MButton{text:"Choose account type";iconName:"accounts";compact:true;onClicked:shell.showAccountChooser()}
         }
         RowLayout {
             Layout.leftMargin: 24
@@ -55,9 +37,7 @@ ScrollView {
                         Text { text: "Microsoft"; color: Theme.text; font.pixelSize: 17; font.weight: Font.DemiBold }
                     }
                     Text {
-                        text: page.microsoftConfigured
-                              ? "Sign in in your browser, then enter the code shown here. Use the Microsoft account that owns Minecraft Java Edition."
-                              : "Microsoft sign-in needs Moly's own app registration. That is launcher setup, not something every player should have to do. This development build still needs that setup."
+                        text: "Sign in in your browser with the Microsoft account that owns Minecraft Java Edition. Moly never asks for your password."
                         color: Theme.textSecondary
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
@@ -65,23 +45,15 @@ ScrollView {
                         lineHeight: 1.15
                     }
                     MButton {
-                        text: page.microsoftConfigured ? "Sign in with Microsoft" : "Set up Microsoft sign-in"
-                        iconName: page.microsoftConfigured ? "external" : "settings"
+                        text: "Sign in with Microsoft"
+                        iconName:"external"
                         kind: "primary"
                         enabled: !launcher.busy
-                        onClicked: page.microsoftConfigured ? launcher.signIn() : page.openMicrosoftSetup()
-                    }
-                    MButton {
-                        visible: page.microsoftConfigured
-                        text: "Sign-in setup"
-                        kind: "ghost"
-                        compact: true
-                        enabled: !launcher.busy
-                        onClicked: page.openMicrosoftSetup()
+                        onClicked:launcher.signIn()
                     }
                     Text {
                         visible: !page.microsoftConfigured
-                        text: "The guide explains the one-time setup. You can use an offline profile in the meantime."
+                        text: "Microsoft sign-in is not available in this build yet. Moly’s owner must finish application registration. Local accounts are available."
                         color: Theme.textMuted
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
@@ -164,97 +136,4 @@ ScrollView {
         }
     }
 
-    LiquidDialog {
-        id: setupDialog
-        property int step: 0
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(600, parent.width - 48)
-        height: Math.min(560, parent.height - 48)
-        modal: true
-        title: "Microsoft sign-in setup"
-        padding: 24
-        closePolicy: Popup.CloseOnEscape
-        contentItem: ColumnLayout {
-            spacing: 16
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 6
-                Repeater {
-                    model: 4
-                    delegate: Rectangle {
-                        required property int index
-                        Layout.fillWidth: true
-                        height: 4
-                        radius: 2
-                        color: index <= setupDialog.step ? Theme.accent : Theme.border
-                        Behavior on color { ColorAnimation { duration: Theme.motion ? 160 : 0 } }
-                    }
-                }
-            }
-            Text {
-                text: ["1. Register the launcher", "2. Enable device sign-in", "3. Check Minecraft access", "4. Add the public app ID"][setupDialog.step]
-                color: Theme.text
-                font.family: Theme.fontFamily
-                font.pixelSize: 20
-                font.weight: Font.DemiBold
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-            }
-            Text {
-                text: [
-                    "The launcher owner registers Moly once in Microsoft Entra. Choose Personal Microsoft accounts only and copy the Application (client) ID from the Overview page. A finished Moly release should include its own ID so players can simply sign in.",
-                    "Open the app's Authentication page. Under Advanced settings, turn Allow public client flows on and save. Moly uses a short browser code; this device flow does not need a redirect URI or a client secret.",
-                    "Minecraft Services access is separate from creating the Microsoft app. Check the official Minecraft API review page for your client ID. The service may reject an app that has not been approved; entering an ID here does not grant approval.",
-                    "Paste Moly's Application (client) ID below. It is a public identifier, not your password, an API key, or a client secret. Save it, then start browser sign-in when you are ready."
-                ][setupDialog.step]
-                color: Theme.textSecondary
-                font.pixelSize: 13
-                wrapMode: Text.Wrap
-                lineHeight: 1.2
-                Layout.fillWidth: true
-            }
-            MButton {
-                visible: setupDialog.step < 3
-                text: ["Open app registration", "Open Microsoft's setup guide", "Open Minecraft API review"][Math.min(setupDialog.step, 2)]
-                iconName: "external"
-                enabled: !launcher.busy
-                onClicked: launcher.openLink([
-                    "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade",
-                    "https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration#enable-public-client-flow",
-                    "https://aka.ms/mce-reviewappid"
-                ][setupDialog.step])
-            }
-            MField {
-                id: setupClientId
-                visible: setupDialog.step === 3
-                Layout.fillWidth: true
-                placeholderText: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                maximumLength: 36
-                validator: RegularExpressionValidator { regularExpression: /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/ }
-                onAccepted: if (acceptableInput) page.saveMicrosoftClient(false)
-            }
-            Text {
-                text: setupDialog.step === 0 ? "Microsoft may require a directory and permission to register apps. If your account cannot create one, this step needs the launcher owner's Microsoft setup."
-                      : setupDialog.step === 2 ? "This is a launcher-developer requirement. There is no ID Moly can safely invent or borrow to skip it."
-                      : setupDialog.step === 3 ? "An approved registration is still required for successful Minecraft sign-in."
-                      : "Do not add a client secret to this desktop launcher."
-                color: Theme.textMuted
-                font.pixelSize: 12
-                wrapMode: Text.Wrap
-                Layout.fillWidth: true
-            }
-            Item { Layout.fillHeight: true }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                MButton { text: "Close"; kind: "ghost"; onClicked: setupDialog.close() }
-                Item { Layout.fillWidth: true }
-                MButton { visible: setupDialog.step > 0; text: "Back"; onClicked: setupDialog.step-- }
-                MButton { visible: setupDialog.step < 3; text: "Next"; kind: "primary"; onClicked: setupDialog.step++ }
-                MButton { visible: setupDialog.step === 3; text: "Save ID"; enabled: setupClientId.acceptableInput && !launcher.busy; onClicked: page.saveMicrosoftClient(false) }
-                MButton { visible: setupDialog.step === 3; text: "Save & sign in"; kind: "primary"; enabled: setupClientId.acceptableInput && !launcher.busy; onClicked: page.saveMicrosoftClient(true) }
-            }
-        }
-    }
 }

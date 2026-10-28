@@ -14,6 +14,7 @@
 /.env.*
 /settings.json
 /accounts.json
+/play-targets.json
 /instances/
 /cache/
 /runtimes/

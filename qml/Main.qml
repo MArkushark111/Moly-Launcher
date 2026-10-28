@@ -67,7 +67,11 @@ ApplicationWindow {
             pendingGameLogs = false
         }
     }
-    function browse(type) { discoverQuery=""; discoverType = type || "mod"; navigate("discover") }
+    function browse(type) {
+        launcher.identifyContent()
+        const component=Qt.createComponent("ContentBrowserWindow.qml")
+        if(component.status===Component.Ready)component.createObject(window,{owner:window,discoverType:type||"mod",targetInstanceId:launcher.selectedId}).show()
+    }
     function browsePacks(query,provider) { discoverQuery=query;discoverProvider=provider;discoverType="modpack";navigate("discover") }
     function exportSetup(format,worlds) { exportFormat=format;exportWorlds=worlds;chooseFile("export") }
     function launchTarget(entry) { launcher.playTarget(entry.instanceId,entry.type,entry.value) }
@@ -75,7 +79,8 @@ ApplicationWindow {
         if(launcher.isInstanceRunning(entry.instanceId)){toast.show("Close this instance before changing its world icon.",true);return}
         worldIconEntry=entry;chooseFile("worldIcon")
     }
-    onPageChanged: playTargets.selectedInstanceId = page==="instance" ? launcher.selectedId : ""
+    onDiscoverTypeChanged: if(page==="discover")discordPresence.setPage("discover:"+discoverType)
+    onPageChanged: {playTargets.selectedInstanceId = page==="instance" ? launcher.selectedId : "";discordPresence.setPage(page==="discover"?"discover:"+discoverType:page)}
 
     function installProject(project) { installModal.openProject(project) }
     function chooseFile(action, type) {
@@ -90,6 +95,7 @@ ApplicationWindow {
     function create() { createDialog.open() }
     function importInstances() { localImport.open() }
     function requestPackImport(path) { window.showNormal();window.raise();window.requestActivate();confirm("importPack","Import this Moly setup?","Moly will copy this pack into a new instance and prepare its game files.\n"+path,path) }
+    function showAccountChooser() { accountChooser.open() }
     function openTaskCenter() { downloadPanel.open() }
     function showPendingInstance() {if(launcher.pendingPlan.title&&!launcher.busy)installModal.openReview();else downloadPanel.open()}
     Shortcut { sequence: "F11"; onActivated: window.visibility === Window.FullScreen ? window.showNormal() : window.showFullScreen() }
@@ -101,7 +107,7 @@ ApplicationWindow {
             confirm("quit", "Close Moly?", "A task or game is still running. Closing Moly will cancel its tasks and stop games it launched. Save and close Minecraft first to protect unsaved progress.")
         }
     }
-    Component.onCompleted: {page=launcher.settings.startupPage||"library";if(launcher.settings.launcherFullscreen)showFullScreen()}
+    Component.onCompleted: {page=launcher.settings.startupPage||"library";if(launcher.settings.launcherFullscreen)showFullScreen();Qt.callLater(function(){if(launcher.settings.showAccountChooser===true || (!launcher.settings.accountSetupDone&&launcher.accounts.length===0))accountChooser.open()})}
     ColumnLayout {
         objectName:"workspace"
         opacity:startup.ready?1:0
@@ -216,6 +222,10 @@ ApplicationWindow {
         function onGameStarted(){if(launcher.settings.openLogsOnLaunch!==false){window.pendingGameLogs=true;window.navigate("instance");Qt.callLater(window.focusGameLogs);}if(launcher.selected.settings&&launcher.selected.settings.keepVisible!==undefined?!launcher.selected.settings.keepVisible:!launcher.settings.keepVisible)window.showMinimized()}
         function onGameEnded(){if(window.visibility===Window.Minimized)window.showNormal()}
     }
+    AccountChooser {id:accountChooser;shell:window}
+    ServerDialog {id:serverDialog}
+    function editServer(entry) {serverDialog.edit(entry)}
+    function addServer() {serverDialog.edit({instanceId:launcher.selectedId})}
     DownloadManager {id:downloadPanel;shell:window}
     InstallDialog{id:installModal;shell:window}
     ImportInstancesDialog{id:localImport;shell:window}

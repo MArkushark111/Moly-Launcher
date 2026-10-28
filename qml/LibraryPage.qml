@@ -104,6 +104,7 @@ Item {
             }
         }
         PlayTargets {
+                        shell:page.shell
             visible: launcher.settings.quickAccess !== false && launcher.instances.length > 0
             Layout.fillWidth: true
             title: "Jump back in"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QJsonObject>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QStringList>
@@ -45,6 +46,10 @@ public:
     Q_INVOKABLE void refreshStatus();
     Q_INVOKABLE void refreshServer(const QString &address);
     Q_INVOKABLE bool copyAddress(const QString &address);
+    Q_INVOKABLE bool saveServer(const QVariantMap &entry);
+    Q_INVOKABLE void hideTarget(const QString &id);
+    Q_INVOKABLE void moveTarget(const QString &id,const QString &beforeId,bool after=false);
+    Q_INVOKABLE void resetLayout();
     // The launcher must reject this operation while the owning game is running.
     Q_INVOKABLE bool setWorldIcon(const QString &instanceId, const QString &worldFolder,
                                   const QString &imageUrl);
@@ -67,6 +72,8 @@ private:
     int pendingPings_ = 0;
     QObject *pingGroup_ = nullptr;
     QMap<QString,QVariantMap> serverSnapshots_;
+    QJsonObject preferences_;
+    bool savePreferences(const QJsonObject &next);
     void rememberServer(const QString &address,const QVariantMap &status);
     void cancelPings();
 };

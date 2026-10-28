@@ -2,18 +2,18 @@
 
 A Windows Minecraft Java Edition launcher built with C++20 and Qt Quick. Moly keeps each Minecraft setup in its own **instance**, so its worlds, mods, resource packs, and shaders stay together.
 
-This is a **0.6.0 preview**. The launcher has working installation and local launch paths; Microsoft sign-in and CurseForge require your own service credentials.
+This is a **0.7.0 preview**. The launcher has working installation and local launch paths; Microsoft sign-in still needs Moly’s owner to register its application. Existing CurseForge credentials stay in Windows Credential Manager.
 
 ## Run the portable build
 
-Extract the entire `MolyLauncher-0.6.0-Windows-x64.zip` archive, then open **MolyLauncher.exe**. Keep the accompanying DLLs and folders beside it. The executable in `dist/MolyLauncher-0.6.0/` is also ready to run without a Qt installation.
+Extract the entire `MolyLauncher-0.7.0-Windows-x64.zip` archive, then open **MolyLauncher.exe**. Keep the accompanying DLLs and folders beside it. The executable in `dist/MolyLauncher-0.7.0/` is also ready to run without a Qt installation.
 
 ## First use
 
-1. Open Moly and go to **Accounts**. Add a local nickname, or configure Microsoft sign-in in **Settings → Connections**.
+1. On first launch, choose a local account or Microsoft sign-in. Microsoft sign-in becomes available when the launcher owner supplies Moly’s approved application ID in the build. You can reopen the chooser in Accounts or Settings → Connections.
 2. Select **Create instance**, then choose a Minecraft version and loader. Choose Fabric, Forge, NeoForge, or Quilt if you want mods.
 3. Creating an instance starts installation automatically. Watch the current step and measured progress on the instance page.
-4. Use the bottom dock to navigate, or open the instance's content browser to find compatible mods, resource packs, or shaders. Choose the instance and release, then confirm once. Dependencies and pack files are prepared only after confirmation.
+4. Use the bottom dock to navigate, or open the instance's content browser to find compatible mods, resource packs, or shaders. Discover asks you to confirm. **Browse mods** inside an instance opens a separate compatible-content window with one-click installation. Dependencies and pack files are prepared only after the install action.
 5. Select **Play**. The instance's **Logs** view shows game output and can open in a separate window.
 
 Offline profiles use installed game files. Servers that require Microsoft authentication need a valid online account session. Resource packs and shader packs must be enabled in Minecraft; shaders also need a compatible shader mod.
@@ -24,7 +24,7 @@ Offline profiles use installed game files. Servers that require Microsoft authen
 - **Library → Jump back in** and **Worlds & servers** show saved worlds and servers from your instances. Server checks use the Java status protocol; Settings controls checks and signal color. Direct entry requires Minecraft quick-play support, normally Java 1.20 or later.
 - **Wardrobe** includes the nine Minecraft default characters and accepts uploaded PNG skins, with a textured 3D player you can rotate. The name tag uses only the active account name. **Apply to account** requires a configured, signed-in Microsoft account. Vanilla offline profiles do not automatically use these local skins.
 - **Share** exports `.mrpack`, Moly portable ZIP, or `.mlypack`. Portable exports can include worlds; Minecraft/Java downloads and account secrets are excluded. See [portable formats](docs/PORTABLE_PACKS.md).
-- The **Tasks** button beside the bottom dock opens active progress and recent tasks. It can open automatically for installs; this is configurable in Settings.
+- The **Tasks** button beside the bottom dock opens active progress and recent tasks. It expands as a compact activity pill during installs; the full task center opens only when clicked.
 
 ## Build and run on this computer
 
@@ -57,10 +57,14 @@ The MSVC preset is an alternative for a machine with Visual Studio Build Tools a
 ## Accounts and connections
 
 - **Modrinth:** public browsing and downloads do not need a key.
-- **CurseForge:** save your API key in **Settings → Connections**, or set `MOLY_CURSEFORGE_API_KEY` in your process environment. Some authors require browser downloads; Moly asks you to select the exact downloaded file and verifies its hash.
-- **Microsoft:** supply your application's public client ID in Settings or `MOLY_MICROSOFT_CLIENT_ID`. The application must support personal Microsoft accounts and public-client device sign-in. Minecraft service access may require approval. Moly opens the browser and never requests your Microsoft password.
+- **CurseForge:** uses your existing Windows Credential Manager entry, or `MOLY_CURSEFORGE_API_KEY` in your process environment. Some authors require browser downloads; Moly asks you to select the exact downloaded file and verifies its hash.
+- **Microsoft (launcher owner):** set the CMake cache option `MOLY_MICROSOFT_CLIENT_ID` when building, or the environment variable of the same name. Player screens do not ask for this ID. The application must support personal Microsoft accounts and public-client device sign-in. Minecraft service access may require approval. Moly opens the browser and never requests your Microsoft password.
 
 Saved CurseForge keys and Microsoft refresh tokens use **Windows Credential Manager**. They are not stored in the source tree or ordinary settings JSON. A desktop Microsoft application does not need a client secret in the launcher.
+
+- **Discord:** Rich Presence connects to the desktop Discord app over local IPC with Moly’s registered application ID. Settings → Connections can turn presence off or hide server details. Numeric IPs, localhost, and local network names always appear as **Private server**. Activity follows Moly navigation and the game/server launched through Moly; changes made inside Minecraft are not observed.
+- **Content versions:** the Versions button lists compatible releases, betas and alphas by publication date. Choose Upgrade or Downgrade; the current build shows Installed. Unknown local files need exact identification before version switching. Imported files available on Modrinth are identified by SHA-1, not their names. One-click installation chooses a stable release; prereleases need an explicit version choice.
+- **Server shortcuts:** add or edit a server, drag its handle to reorder it, or remove it from Jump in. These actions affect Moly’s shortcuts and preserve Minecraft’s own Multiplayer list. The quick-access menu restores hidden shortcuts and ordering. Server descriptions and displayed addresses are configurable.
 
 ## Where things live
 
@@ -89,7 +93,7 @@ Inside the data folder, `instances/<id>/game` holds each instance's game files. 
 .\scripts\build.ps1 -Package
 ```
 
-This prepares the app with its Qt runtime under `dist/MolyLauncher-0.6.0` and creates a ZIP. With an installed Inno Setup compiler, pass its `ISCC.exe` path using `-InnoCompiler` to build the installer described by `packaging/moly.iss`.
+This prepares the app with its Qt runtime under `dist/MolyLauncher-0.7.0` and creates a ZIP. With an installed Inno Setup compiler, pass its `ISCC.exe` path using `-InnoCompiler` to build the installer described by `packaging/moly.iss`.
 
 The packaging recipe does not provide a code-signing certificate. A clean-machine installation test and a signed release are still release tasks. See [THIRD_PARTY.md](THIRD_PARTY.md) for runtime notices and [docs/TESTING.md](docs/TESTING.md) for verification details.
 

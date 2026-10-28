@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 - Make it yours
+
+- Stop treating shared Minecraft and Feather folders as installed Badlion, LabyMod or Dawn instances.
+- Add editable Moly server shortcuts, persistent drag order, removable/restorable quick access, right-aligned connection info, and optional server descriptions/addresses.
+- Add Discord desktop Rich Presence, server-detail controls, and numeric/local-address privacy.
+- Separate Discover confirmation from the instance’s one-click content browser window; mark known installed projects. Identify untracked Modrinth content by exact file hashes.
+- Add compatible release/beta/alpha version selection with Installed, Upgrade and Downgrade states, transactional replacements and backups.
+- Extract local resource/shader pack icons and enrich identified content artwork. Round card artwork, add a subtle fallback cover, and adjust task text alignment.
+- Color warning/error log lines and escape log markup.
+- Add first-run Local / Microsoft account chooser and remove client-ID fields from player screens. Microsoft still requires owner-supplied registration.
+
 ## 0.6.0 - A cleaner start
 
 - Add Dawn Client, Fast Client, NoRisk Client, Badlion Client, LabyMod, Feather and GDLauncher import choices with identifying logos and a searchable source rail.

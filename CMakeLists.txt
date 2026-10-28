@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(MolyLauncher VERSION 0.6.0 LANGUAGES CXX)
+project(MolyLauncher VERSION 0.7.0 LANGUAGES CXX)
 set(CMAKE_INSTALL_BINDIR ".")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,7 +14,10 @@ target_link_libraries(moly_engine PUBLIC Qt6::Core Qt6::Network Qt6::Concurrent 
 if(WIN32)
     target_link_libraries(moly_engine PRIVATE advapi32)
 endif()
-add_library(moly_desktop STATIC src/instanceimport.cpp src/instanceimport.h src/fileassociation.cpp src/fileassociation.h src/artwork.cpp src/artwork.h src/playtargets.cpp src/playtargets.h src/skinstore.cpp src/skinstore.h src/skinmodel.cpp src/skinmodel.h)
+add_library(moly_desktop STATIC src/discordpresence.cpp src/discordpresence.h src/instanceimport.cpp src/instanceimport.h src/fileassociation.cpp src/fileassociation.h src/artwork.cpp src/artwork.h src/playtargets.cpp src/playtargets.h src/skinstore.cpp src/skinstore.h src/skinmodel.cpp src/skinmodel.h)
+set(MOLY_MICROSOFT_CLIENT_ID "" CACHE STRING "Moly's registered Microsoft public application ID")
+set(MOLY_DISCORD_APPLICATION_ID "1564996413849346068" CACHE STRING "Moly's registered Discord application ID")
+target_compile_definitions(moly_desktop PUBLIC MOLY_MICROSOFT_CLIENT_ID="${MOLY_MICROSOFT_CLIENT_ID}" MOLY_DISCORD_APPLICATION_ID="${MOLY_DISCORD_APPLICATION_ID}")
 target_include_directories(moly_desktop PUBLIC src)
 target_link_libraries(moly_desktop PUBLIC moly_engine Qt6::Gui Qt6::Quick Qt6::Network Qt6::Concurrent Qt6::Sql PRIVATE Qt6::CorePrivate)
 file(GLOB default_skin_textures CONFIGURE_DEPENDS "assets/default-skins/wide/*.png" "assets/default-skins/slim/*.png")
@@ -27,7 +30,7 @@ if(WIN32)
 endif()
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 qt_add_qml_module(MolyLauncher URI Moly VERSION 1.0 QML_FILES
-    qml/Startup.qml qml/ImportInstancesDialog.qml qml/ReorderHandle.qml qml/MSpinBox.qml qml/ArcSpinner.qml qml/MSlider.qml qml/MComboBox.qml qml/ProviderIcon.qml qml/MMenu.qml qml/MMenuItem.qml qml/MCheckBox.qml qml/TaskActivity.qml qml/InstanceSettings.qml qml/MProgressBar.qml qml/LiquidDialog.qml qml/InstanceAvatar.qml qml/Theme.qml qml/MSwitch.qml qml/Icon.qml qml/NavItem.qml qml/TabStrip.qml qml/InstallDialog.qml
+    qml/AccountChooser.qml qml/ServerDialog.qml qml/ContentBrowserWindow.qml qml/ContentVersionsDialog.qml qml/Startup.qml qml/ImportInstancesDialog.qml qml/ReorderHandle.qml qml/MSpinBox.qml qml/ArcSpinner.qml qml/MSlider.qml qml/MComboBox.qml qml/ProviderIcon.qml qml/MMenu.qml qml/MMenuItem.qml qml/MCheckBox.qml qml/TaskActivity.qml qml/InstanceSettings.qml qml/MProgressBar.qml qml/LiquidDialog.qml qml/InstanceAvatar.qml qml/Theme.qml qml/MSwitch.qml qml/Icon.qml qml/NavItem.qml qml/TabStrip.qml qml/InstallDialog.qml
     qml/Main.qml qml/MButton.qml qml/MField.qml qml/Panel.qml qml/Badge.qml
     qml/LibraryPage.qml qml/InstancePage.qml qml/DiscoverPage.qml
     qml/AccountsPage.qml qml/SettingsPage.qml qml/LogView.qml qml/LogWindow.qml
@@ -94,3 +97,7 @@ qt_add_executable(startup_tests tests/startup_tests.cpp src/startup.h)
 target_link_libraries(startup_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
 target_include_directories(startup_tests PRIVATE src)
 add_test(NAME startup_stages COMMAND startup_tests)
+
+qt_add_executable(discord_tests tests/discord_tests.cpp)
+target_link_libraries(discord_tests PRIVATE moly_desktop Qt6::Test)
+add_test(NAME discord_presence COMMAND discord_tests)

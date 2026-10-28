@@ -22,6 +22,7 @@
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QSettings>
+#include <QHostAddress>
 #include <QStandardPaths>
 #include <QUuid>
 #include <QtConcurrent>
@@ -62,6 +63,7 @@ Launcher::Launcher(QString location, QObject *parent) : QObject(parent), root(st
     QTimer::singleShot(250,this,&Launcher::refreshPackIcons);
 }
 Launcher::~Launcher() {
+    identityCancelled=true;identityWatcher.waitForFinished();
     localScanCancelled=true;localScanWatcher.waitForFinished();
     choicesCancelled=true;choicesWatcher.waitForFinished();
     iconCancelled=true;iconWatcher.waitForFinished();
@@ -91,6 +93,9 @@ void Launcher::load() {
                   {"microsoftClientId", QString::fromUtf8(qgetenv("MOLY_MICROSOFT_CLIENT_ID"))}};
     if (!QRegularExpression("^#[0-9a-fA-F]{6}$").match(config["accentColor"].toString()).hasMatch())
         config["accentColor"] = "#8b5cf6";
+    const auto clientOverride=QString::fromUtf8(qgetenv("MOLY_MICROSOFT_CLIENT_ID"));
+    if(!clientOverride.isEmpty())config["microsoftClientId"]=clientOverride;
+    else if(config["microsoftClientId"].toString().isEmpty())config["microsoftClientId"]=QString(MOLY_MICROSOFT_CLIENT_ID);
     accountList = readObject(root + "/accounts.json", true)["accounts"].toArray();
     reloadInstances();
     auto cached = readObject(root + "/cache/version-manifest.json", true);
@@ -673,7 +678,12 @@ void Launcher::playTarget(const QString &instanceId,const QString &type,const QS
         if(type=="world") {
             if(value.contains('/')||value.contains('\\')||!QFileInfo::exists(safePath(instanceDir(*found)+"/game/saves",value)+"/level.dat"))throw Error("This saved world is no longer available.");
         }else if(parseMinecraftAddress(value).isEmpty())throw Error("This server address is not valid.");
-        selectInstance(instanceId);launchTarget={{"type",type},{"value",value}};play();launchTarget={};
+        selectInstance(instanceId);launchTarget={{"type",type},{"value",value}};
+        if(type=="server") {
+            try{for(auto entry:readMinecraftNbtFile(instanceDir(current())+"/game/servers.dat")["servers"].toList()){auto server=entry.toMap();if(server["ip"].toString().compare(value,Qt::CaseInsensitive)==0)launchTarget["name"]=server["name"].toString().left(80);}}catch(const std::exception &){}
+            try{for(auto entry:readObject(root+"/play-targets.json",true)["servers"].toArray()){auto server=entry.toObject();if(server["instanceId"]==instanceId&&server["address"].toString().compare(value,Qt::CaseInsensitive)==0)launchTarget["name"]=server["name"].toString().left(80);}}catch(const std::exception &){}
+        }
+        play();launchTarget={};
     }catch(const std::exception &e){launchTarget={};emit notice(QString::fromUtf8(e.what()),true);}
 }
 void Launcher::appendLog(const QString &id, const QString &text) {
@@ -733,7 +743,7 @@ void Launcher::launchProcess(QJsonObject instance, QJsonObject state, QJsonObjec
     connect(p, &QProcess::errorOccurred, this, [this, id](QProcess::ProcessError e) {
         if (e == QProcess::FailedToStart) {
             appendLog(id, "[ERROR] Java could not start. Check your Java path or use Repair / Install.");
-            auto proc = processes.take(id);
+            auto proc = processes.take(id);processTargets.remove(id);
             if (proc)
                 proc->deleteLater();
             emit changed();
@@ -753,7 +763,7 @@ void Launcher::launchProcess(QJsonObject instance, QJsonObject state, QJsonObjec
                 appendLog(id, "[Moly] " + msg);
                 logFile->write(("\n[Moly] " + msg).toUtf8());
                 logFile->close();
-                processes.remove(id);
+                processes.remove(id);processTargets.remove(id);
                 processSecrets.remove(id);
                 if (startedAt.contains(id)) {
                     const auto seconds =
@@ -774,6 +784,7 @@ void Launcher::launchProcess(QJsonObject instance, QJsonObject state, QJsonObjec
                 emit gameEnded();
                 emit notice(msg, code != 0);
             });
+    processTargets[id]=instance["_quickPlay"].toObject();
     processes[id] = p;
     appendLog(id, "[Moly] Launching " + instance["name"].toString() + " with Java " +
                       QString::number(state["javaMajor"].toInt()) +
@@ -868,7 +879,7 @@ void Launcher::setReducedMotion(bool enabled) {
 void Launcher::setUiPreferences(const QVariantMap &values) {
     const auto previous=config;
     try {
-        for(const auto &key:QStringList{"animateArtwork","skinIdle","quickAccess","serverPing","showCompletedTasks","libraryGrid","showInstanceRail","showModCounts","openLogsOnLaunch","showQuickAccessRefresh"})
+        for(const auto &key:QStringList{"animateArtwork","skinIdle","quickAccess","serverPing","showCompletedTasks","libraryGrid","showInstanceRail","showModCounts","openLogsOnLaunch","showQuickAccessRefresh","discordPresence","discordShareServer","showServerMotd","showServerAddress","showAccountChooser","accountSetupDone"})
             if(values.contains(key))config[key]=values[key].toBool();
         if(values.contains("pingColor")) {
             const auto color=values["pingColor"].toString().trimmed().toLower();
@@ -960,6 +971,7 @@ void Launcher::addOfflineAccount(const QString &name) {
 }
 void Launcher::signIn() {
     auto client = config["microsoftClientId"].toString();
+    if(!microsoftAvailable()){emit notice("Microsoft sign-in is not configured in this build. Moly's owner must register its application before it can authorize accounts.",true);return;}
     task(
         "Sign in with Microsoft",
         [this, client](Context c) {
@@ -1118,6 +1130,13 @@ void Launcher::enrichReview(QJsonObject plan, const QString &requestedTarget) {
                     file["modified"] = true;
             }
         }
+        if(!instance.isEmpty())for(auto value:known) {
+            const auto old=value.toObject();
+            if(!file["projectId"].toString().isEmpty()&&old["provider"]==file["provider"]&&old["projectId"]==file["projectId"]) {
+                const auto oldPath=contentPath(instanceDir(instance)+"/game",old["path"].toString());
+                if(QFileInfo::exists(oldPath)&&fileHash(oldPath,old["algorithm"].toString("sha1"))!=old["hash"].toString())file["modified"]=true;
+            }
+        }
         files[n] = file;
     }
     plan["files"] = files;
@@ -1169,7 +1188,7 @@ void Launcher::startInstallChoices() {
     const auto generation = choicesGeneration;
     const auto project = choicesProject, instance = choicesInstance;
     const auto cacheKey = project["provider"].toString()+"/"+project["projectId"].toString()+"/"+
-                          project["type"].toString()+"/"+instance["version"].toString()+"/"+instance["loader"].toString();
+                          project["type"].toString()+"/"+instance["version"].toString()+"/"+instance["loader"].toString()+"/"+project["versionId"].toString();
     if (choicesCache.contains(cacheKey)) {
         installVersionList = choicesCache.value(cacheKey);
         choicesLoading = false;
@@ -1267,8 +1286,10 @@ void Launcher::planInstall(const QVariantMap &project) {
                 throw Error("No release supports this instance's Minecraft version and loader. Choose "
                             "another instance or version.");
             auto project = data;
-            if (project["versionId"].toString().isEmpty())
-                project["versionId"] = available[0].toObject()["id"];
+            if (project["versionId"].toString().isEmpty()) {
+                for(auto value:available)if(value.toObject()["channel"].toString("release")=="release"){project["versionId"]=value.toObject()["id"];break;}
+                if(project["versionId"].toString().isEmpty())throw Error("Only beta or alpha builds are available. Open Versions and choose one explicitly.");
+            }
             bool compatible = false;
             for (auto value : available)
                 if (value.toObject()["id"] == project["versionId"])
@@ -1677,4 +1698,85 @@ void Launcher::relocate(const QString &url) {
                         "each instance after restarting.",
                         false);
         });
+}
+
+bool Launcher::microsoftAvailable() const {
+    return QRegularExpression("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").match(config["microsoftClientId"].toString()).hasMatch();
+}
+QVariantList Launcher::installedContent() const {
+    QVariantList result;
+    if(current().isEmpty())return result;
+    for(const auto &type:QStringList{"mod","resourcepack","shader"})result.append(contentFiles(type));
+    return result;
+}
+QVariantMap Launcher::presenceActivity(const QString &page,bool shareServer) const {
+    for(auto it=processes.cbegin();it!=processes.cend();++it) {
+        if(it.value()->state()!=QProcess::Running)continue;
+        QString name;for(const auto &instance:instanceList)if(instance["id"]==it.key())name=instance["name"].toString();
+        const auto target=processTargets.value(it.key());
+        return {{"details","Playing "+name.left(110)},{"server",shareServer&&target["type"]=="server"?target["value"].toString():QString()},{"serverName",target["name"].toString()},{"playing",true}};
+    }
+    const auto kind=page.section(':',1);const auto browsing=kind=="mod"?"Browsing mods":kind=="shader"?"Browsing shaders":kind=="resourcepack"?"Browsing resource packs":"Browsing modpacks";
+    return {{"details",page.startsWith("discover")?browsing:page=="skins"?"Choosing a skin":page=="instance"?"Managing an instance":"In the launcher"},{"playing",false}};
+}
+void Launcher::identifyContent() {
+    if(working||identityWatcher.isRunning()||current().isEmpty()||processes.contains(selection))return;
+    const auto instance=current();const auto base=root;const auto id=selection;
+    identityCancelled=false;identityWatcher.disconnect(this);
+    connect(&identityWatcher,&QFutureWatcher<QJsonObject>::finished,this,[this,id]{
+        const auto result=identityWatcher.result();if(processes.contains(id)||(working&&activeTaskInstanceId==id))return;
+        try {
+            const auto dir=safePath(root+"/instances",id);auto manifest=readObject(dir+"/content.json",true);auto files=manifest["files"].toArray();bool updated=false;
+            for(auto value:result["files"].toArray()) {
+                auto entry=value.toObject();const QFileInfo file(contentPath(dir+"/game",entry["path"].toString()));
+                if(!file.isFile()||file.size()!=qint64(entry["size"].toDouble())||file.lastModified().toMSecsSinceEpoch()!=qint64(entry["mtime"].toDouble()))continue;
+                bool known=false;
+                for(qsizetype n=files.size()-1;n>=0;--n)if(files[n].toObject()["path"]==entry["path"]) {
+                    if(!files[n].toObject()["projectId"].toString().isEmpty())known=true;
+                    else files.removeAt(n);
+                }
+                if(known) {
+                    if(entry["metadataOnly"].toBool())for(qsizetype n=0;n<files.size();++n)if(files[n].toObject()["path"]==entry["path"]) {
+                        auto old=files[n].toObject();for(const auto &key:QStringList{"title","icon","author"})if(old[key].toString().isEmpty()&&!entry[key].toString().isEmpty()){old[key]=entry[key];updated=true;}files[n]=old;
+                    }
+                    continue;
+                }
+                entry.remove("mtime");entry.remove("metadataOnly");files.append(entry);updated=true;
+            }
+            if(updated){manifest["files"]=files;writeObject(dir+"/content.json",manifest);emit changed();}
+        }catch(const std::exception &){} // Optional identification never blocks local play.
+    });
+    identityWatcher.setFuture(QtConcurrent::run([this,base,instance]{
+        QJsonArray found;
+        try {
+            Context context{&identityCancelled};Network net(context);QMap<QString,QJsonObject> byHash;QJsonArray hashes,projects;QJsonArray metadataOnly;
+            for(const auto &type:QStringList{"mod","resourcepack","shader"})for(auto value:Content(base).files(instance,type)) {
+                context.check();auto entry=value.toObject();
+                const auto path=contentPath(base+"/instances/"+instance["id"].toString()+"/game",entry["path"].toString());QFileInfo file(path);
+                entry["mtime"]=double(file.lastModified().toMSecsSinceEpoch());
+                if(!entry["projectId"].toString().isEmpty()){
+                    if(entry["provider"]=="Modrinth"&&entry["icon"].toString().isEmpty()){entry["metadataOnly"]=true;metadataOnly.append(entry);if(!projects.contains(entry["projectId"]))projects.append(entry["projectId"]);}
+                    continue;
+                }
+                if(file.size()>256*1024*1024||hashes.size()>=300)continue;
+                const auto hash=fileHash(path,"sha1");entry["hash"]=hash;entry["algorithm"]="sha1";entry["mtime"]=double(file.lastModified().toMSecsSinceEpoch());byHash[hash]=entry;hashes.append(hash);
+            }
+            const auto identified=hashes.isEmpty()?QJsonObject{}:net.json("https://api.modrinth.com/v2/version_files",{{"hashes",hashes},{"algorithm","sha1"}}).object();
+            for(auto it=identified.begin();it!=identified.end();++it) {
+                if(!byHash.contains(it.key()))continue;auto entry=byHash[it.key()];const auto version=it.value().toObject();
+                entry["provider"]="Modrinth";entry["projectId"]=version["project_id"];entry["versionId"]=version["id"];entry["versionName"]=version["version_number"];
+                if(!projects.contains(entry["projectId"]))projects.append(entry["projectId"]);found.append(entry);
+            }
+            for(auto value:metadataOnly)found.append(value);
+            if(!projects.isEmpty()) {
+                QMap<QString,QJsonObject> info;
+                for(qsizetype offset=0;offset<projects.size();offset+=100){QJsonArray batch;for(qsizetype n=offset;n<qMin(offset+100,projects.size());++n)batch.append(projects[n]);
+                    const auto url="https://api.modrinth.com/v2/projects?ids="+QString::fromLatin1(QUrl::toPercentEncoding(QString::fromUtf8(QJsonDocument(batch).toJson(QJsonDocument::Compact))));
+                    for(auto value:net.json(url).array()){auto project=value.toObject();info[project["id"].toString()]=project;}
+                }
+                for(qsizetype n=0;n<found.size();++n){auto entry=found[n].toObject();const auto project=info.value(entry["projectId"].toString());if(!project.isEmpty()){entry["title"]=project["title"];const auto icon=QUrl(project["icon_url"].toString());if(icon.scheme()=="https")entry["icon"]=icon.toString();}found[n]=entry;}
+            }
+        }catch(const std::exception &){}
+        return QJsonObject{{"files",found}};
+    }));
 }

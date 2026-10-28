@@ -35,7 +35,7 @@ Item {
         }
         while(contentRows.count>desired.length)contentRows.remove(contentRows.count-1)
     }
-    Component.onCompleted: Qt.callLater(refreshFiles)
+    Component.onCompleted: {Qt.callLater(refreshFiles);Qt.callLater(launcher.identifyContent)}
     onTypeChanged: Qt.callLater(refreshFiles)
     function switchTab(index) {
         if (index === tab)
@@ -46,6 +46,7 @@ Item {
     }
     function browseContent() { shell.browse(type) }
     Connections { target:launcher; function onChanged(){page.revision++;Qt.callLater(page.refreshFiles)} }
+    ContentVersionsDialog {id:versionDialog}
     DropArea {anchors.fill:parent;onDropped:function(drop){if(!drop.hasUrls||launcher.busy||instance.running)return;for(let url of drop.urls)if(url.toString().toLowerCase().endsWith(".jar")){launcher.importFile(url.toString(),"mod");drop.acceptProposedAction();break}}}
     ColumnLayout {
         anchors.fill:parent;anchors.margins:24;spacing:16
@@ -123,11 +124,11 @@ Item {
                 }
                 Rectangle{Layout.fillWidth:true;Layout.fillHeight:true;radius:9;color:Theme.surface;border.color:Theme.border;clip:true
                     ColumnLayout{anchors.fill:parent;spacing:0
-                        Rectangle{Layout.fillWidth:true;height:36;color:Theme.surface2
+                        Rectangle{Layout.fillWidth:true;height:36;radius:9;color:Theme.surface2
                             RowLayout{anchors.fill:parent;anchors.leftMargin:58;anchors.rightMargin:18
                                 Text{text:"Project";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}
                                 Text{text:"Version";color:Theme.textSecondary;font.pixelSize:12;Layout.preferredWidth:150}
-                                Text{text:"Actions";color:Theme.textSecondary;font.pixelSize:12;Layout.preferredWidth:95;horizontalAlignment:Text.AlignRight}
+                                Text{text:"Actions";color:Theme.textSecondary;font.pixelSize:12;Layout.preferredWidth:185;horizontalAlignment:Text.AlignRight}
                             }
                         }
                         ListView{id:fileList;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;model:contentRows;reuseItems:true;ScrollBar.vertical:ScrollBar{}
@@ -150,6 +151,7 @@ Item {
                                         Text{text:fileRow.modelData.name;color:Theme.textMuted;font.family:"Consolas";font.pixelSize:11;elide:Text.ElideMiddle;Layout.fillWidth:true}
                                     }
                                     Text{text:fileRow.modelData.versionName||"Local";color:Theme.textSecondary;font.pixelSize:12;elide:Text.ElideRight;Layout.preferredWidth:150}
+                                    MButton{text:"Versions";iconName:"clock";kind:"ghost";compact:true;enabled:!!fileRow.modelData.projectId&&!launcher.busy&&!instance.running;onClicked:versionDialog.openFile(fileRow.modelData)}
                                     MSwitch{objectName:"installedModSwitch";checked:fileRow.modelData.enabled;enabled:!launcher.busy&&!instance.running;onClicked:launcher.toggleFile(fileRow.modelData.path);Accessible.name:"Enable "+fileRow.modelData.name}
                                     MButton{iconName:"trash";kind:"ghost";compact:true;opacity:rowHover.hovered||activeFocus?1:0.35;enabled:!launcher.busy&&!instance.running;labelColor:Theme.danger;onClicked:launcher.removeFile(fileRow.modelData.path);Accessible.name:"Remove "+fileRow.modelData.name;Behavior on opacity{NumberAnimation{duration:Theme.motion?140:0}}}
                                 }
@@ -178,8 +180,9 @@ Item {
                 id:placesScroll;clip:true;contentWidth:availableWidth
                 ColumnLayout {
                     width:placesScroll.availableWidth;spacing:14
-                    RowLayout {Layout.fillWidth:true;Text{text:"Your places";color:Theme.text;font.pixelSize:17;font.weight:Font.DemiBold;Layout.fillWidth:true}MButton{text:"Open saves";iconName:"folder";compact:true;onClicked:launcher.openFolder("saves")}MButton{text:"Back up worlds";iconName:"download";compact:true;enabled:!launcher.busy&&!instance.running;onClicked:launcher.backupWorlds()}}
+                    RowLayout {Layout.fillWidth:true;Text{text:"Your places";color:Theme.text;font.pixelSize:17;font.weight:Font.DemiBold;Layout.fillWidth:true}MButton{text:"Add server";iconName:"plus";compact:true;enabled:!instance.running;onClicked:shell.addServer()}MButton{text:"Open saves";iconName:"folder";compact:true;onClicked:launcher.openFolder("saves")}MButton{text:"Back up worlds";iconName:"download";compact:true;enabled:!launcher.busy&&!instance.running;onClicked:launcher.backupWorlds()}}
                     PlayTargets {
+                        shell:page.shell
                         Layout.fillWidth:true;items:playTargets.items;pingColor:Theme.serverAccent;loading:playTargets.loading;checkingStatus:playTargets.checkingStatus;maximumRows:0;showInstanceName:false;actionsEnabled:!launcher.busy&&!instance.running
                         title:"Worlds & saved servers";onActivated:function(entry){shell.launchTarget(entry)};onChangeWorldIcon:function(entry){shell.chooseWorldIcon(entry)};onRefreshRequested:playTargets.refresh()
                     }

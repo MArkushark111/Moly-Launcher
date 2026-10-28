@@ -75,6 +75,11 @@ private slots:
         QSqlDatabase::removeDatabase("nrc-fixture");const auto original=fileHash(file);
         const auto rows=InstanceImport::scan("NoRisk Client",{source.path()});QCOMPARE(rows.size(),1);QCOMPARE(rows.first().toObject()["loader"].toString(),QString("Fabric"));QCOMPARE(fileHash(file),original);QVERIFY(!QJsonDocument(rows).toJson().contains("never-import-this"));
     }
+    void clientAutoDetectionNeverUsesAnotherLauncherRoot() {
+        for(const auto &provider:QStringList{"Badlion Client","LabyMod","Dawn Client"})for(const auto &root:InstanceImport::defaultRoots(provider)) {
+            QVERIFY(!root.endsWith("/.minecraft"));if(provider=="Dawn Client")QVERIFY(!root.endsWith("/.feather"));
+        }
+    }
     void additionalClientFoldersStayExplicit() {
         QTemporaryDir source;data(source.path());
         for(const auto &provider:QStringList{"Dawn Client","Badlion Client","LabyMod","Feather","GDLauncher"}) {
