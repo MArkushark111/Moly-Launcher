@@ -1,10 +1,10 @@
 #ifndef AppSource
-  #define AppSource "..\dist\MolyLauncher-0.8.0"
+  #define AppSource "..\dist\MolyLauncher-0.8.1"
 #endif
 [Setup]
 AppId={{168DBEC3-1C53-44B5-ADB7-587233624632}
 AppName=Moly Launcher
-AppVersion=0.8.0
+AppVersion=0.8.1
 AppPublisher=Moly
 DefaultDirName={localappdata}\Programs\Moly Launcher
 DefaultGroupName=Moly Launcher
@@ -13,7 +13,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 OutputDir=..\dist
-OutputBaseFilename=MolyLauncher-0.8.0-Windows-x64-Setup
+OutputBaseFilename=MolyLauncher-0.8.1-Windows-x64-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

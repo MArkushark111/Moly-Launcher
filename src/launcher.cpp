@@ -23,6 +23,8 @@
 #include <QRegularExpression>
 #include <QSettings>
 #include <QHostAddress>
+#include <QGuiApplication>
+#include <QClipboard>
 #include <QStandardPaths>
 #include <QUuid>
 #include <QtConcurrent>
@@ -63,6 +65,7 @@ Launcher::Launcher(QString location, QObject *parent) : QObject(parent), root(st
     QTimer::singleShot(250,this,&Launcher::refreshPackIcons);
 }
 Launcher::~Launcher() {
+    authCancelled=true;authWatcher.waitForFinished();
     identityCancelled=true;identityWatcher.waitForFinished();
     localScanCancelled=true;localScanWatcher.waitForFinished();
     choicesCancelled=true;choicesWatcher.waitForFinished();
@@ -343,7 +346,7 @@ void Launcher::task(const QString &title, std::function<QJsonObject(Context)> wo
                 transferSpeed = 0;
                 activeTaskInstanceId.clear();
                 activeTaskOperation.clear();
-                deviceCode.clear();
+
                 statusText = failed ? result["_error"].toString() : "Task complete";
                 progressValue = failed ? 0 : 1;
                 if (recordJob && !jobList.isEmpty()) {
@@ -973,33 +976,36 @@ void Launcher::addOfflineAccount(const QString &name) {
     }
 }
 void Launcher::signIn() {
-    auto client = config["microsoftClientId"].toString();
-    if(!microsoftAvailable()){emit notice("Microsoft sign-in is not configured in this build. Moly's owner must register its application before it can authorize accounts.",true);return;}
-    task(
-        "Sign in with Microsoft",
-        [this, client](Context c) {
-            auto result = Accounts(c).signIn(client, [this](QString code, QString url) {
-                QMetaObject::invokeMethod(
-                    this,
-                    [this, code, url] {
-                        deviceCode = code;
-                        emit loginChanged();
-                        openLink(url);
-                    },
-                    Qt::QueuedConnection);
+    if(authWatcher.isRunning())return;
+    if(!microsoftAvailable()){emit notice("Microsoft sign-in is not configured in this build.",true);return;}
+    authCancelled=false;deviceCode.clear();authUrl.clear();authState="requesting";authMessage="Requesting a browser code…";emit loginChanged();
+    const auto client=config["microsoftClientId"].toString();
+    authWatcher.disconnect(this);
+    connect(&authWatcher,&QFutureWatcher<QJsonObject>::finished,this,[this]{
+        const auto result=authWatcher.result();deviceCode.clear();authUrl.clear();
+        if(authCancelled){authState="cancelled";authMessage="Sign-in cancelled.";}
+        else if(result.contains("error")){authState="error";authMessage=result["error"].toString();}
+        else try {
+            const auto account=result["account"].toObject();
+            for(qsizetype n=accountList.size()-1;n>=0;--n)if(accountList[n].toObject()["id"]==account["id"])accountList.removeAt(n);
+            accountList.append(account);config["activeAccount"]=account["id"];persist();
+            authState="success";authMessage="Connected as "+account["name"].toString();
+        }catch(const std::exception &e){authState="error";authMessage=redact(QString::fromUtf8(e.what()));}
+        emit loginChanged();
+    });
+    authWatcher.setFuture(QtConcurrent::run([this,client]{
+        try {
+            const auto result=Accounts(Context{&authCancelled}).signIn(client,[this](QString code,QString url){
+                QMetaObject::invokeMethod(this,[this,code,url]{if(authCancelled)return;deviceCode=code;authUrl=url;authState="waiting";authMessage="Finish authorizing Moly in your browser.";emit loginChanged();openLoginBrowser();},Qt::QueuedConnection);
             });
-            return result.account;
-        },
-        [this](QJsonObject a) {
-            for (qsizetype i = accountList.size() - 1; i >= 0; --i)
-                if (accountList[i].toObject()["id"] == a["id"])
-                    accountList.removeAt(i);
-            accountList.append(a);
-            config["activeAccount"] = a["id"];
-            persist();
-            emit notice("Signed in as " + a["name"].toString(), false);
-        });
+            return QJsonObject{{"account",result.account}};
+        }catch(const std::exception &e){return QJsonObject{{"error",redact(QString::fromUtf8(e.what()))}};}
+    }));
 }
+void Launcher::cancelSignIn(){if(!authWatcher.isRunning())return;authCancelled=true;deviceCode.clear();authUrl.clear();authState="cancelled";authMessage="Cancelling sign-in…";emit loginChanged();}
+void Launcher::copyLoginCode(){if(!deviceCode.isEmpty())QGuiApplication::clipboard()->setText(deviceCode);}
+void Launcher::openLoginBrowser(){if(!authUrl.isEmpty()&&QUrl(authUrl).scheme()=="https")openLink(authUrl);}
+
 void Launcher::selectAccount(const QString &id) {
     try {
         config["activeAccount"] = id;

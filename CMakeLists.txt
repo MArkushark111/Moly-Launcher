@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(MolyLauncher VERSION 0.8.0 LANGUAGES CXX)
+project(MolyLauncher VERSION 0.8.1 LANGUAGES CXX)
 set(CMAKE_INSTALL_BINDIR ".")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,7 +33,7 @@ if(WIN32)
 endif()
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 qt_add_qml_module(MolyLauncher URI Moly VERSION 1.0 QML_FILES
-    qml/Intro.qml qml/AccountChooser.qml qml/ServerDialog.qml qml/ContentBrowserWindow.qml qml/ContentVersionsDialog.qml qml/Startup.qml qml/ImportInstancesDialog.qml qml/ReorderHandle.qml qml/MSpinBox.qml qml/ArcSpinner.qml qml/MSlider.qml qml/MComboBox.qml qml/ProviderIcon.qml qml/MMenu.qml qml/MMenuItem.qml qml/MCheckBox.qml qml/TaskActivity.qml qml/InstanceSettings.qml qml/MProgressBar.qml qml/LiquidDialog.qml qml/InstanceAvatar.qml qml/Theme.qml qml/MSwitch.qml qml/Icon.qml qml/NavItem.qml qml/TabStrip.qml qml/InstallDialog.qml
+    qml/LoginStatus.qml qml/Intro.qml qml/AccountChooser.qml qml/ServerDialog.qml qml/ContentBrowserWindow.qml qml/ContentVersionsDialog.qml qml/Startup.qml qml/ImportInstancesDialog.qml qml/ReorderHandle.qml qml/MSpinBox.qml qml/ArcSpinner.qml qml/MSlider.qml qml/MComboBox.qml qml/ProviderIcon.qml qml/MMenu.qml qml/MMenuItem.qml qml/MCheckBox.qml qml/TaskActivity.qml qml/InstanceSettings.qml qml/MProgressBar.qml qml/LiquidDialog.qml qml/InstanceAvatar.qml qml/Theme.qml qml/MSwitch.qml qml/Icon.qml qml/NavItem.qml qml/TabStrip.qml qml/InstallDialog.qml
     qml/Main.qml qml/MButton.qml qml/MField.qml qml/Panel.qml qml/Badge.qml
     qml/LibraryPage.qml qml/InstancePage.qml qml/DiscoverPage.qml
     qml/AccountsPage.qml qml/SettingsPage.qml qml/LogView.qml qml/LogWindow.qml

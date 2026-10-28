@@ -41,6 +41,8 @@ class Launcher : public QObject {
     Q_PROPERTY(bool canRetry READ canRetry NOTIFY statusChanged)
     Q_PROPERTY(QString logText READ logText NOTIFY logsChanged)
     Q_PROPERTY(QString dataRoot READ dataRoot NOTIFY changed)
+    Q_PROPERTY(QString loginState READ loginState NOTIFY loginChanged)
+    Q_PROPERTY(QString loginMessage READ loginMessage NOTIFY loginChanged)
     Q_PROPERTY(QString loginCode READ loginCode NOTIFY loginChanged)
     Q_PROPERTY(bool curseConnected READ curseConnected NOTIFY changed)
     Q_PROPERTY(int memoryTotal READ memoryTotal CONSTANT)
@@ -131,6 +133,11 @@ class Launcher : public QObject {
     QString loginCode() const {
         return deviceCode;
     }
+    QString loginState() const { return authState; }
+    QString loginMessage() const { return authMessage; }
+    Q_INVOKABLE void cancelSignIn();
+    Q_INVOKABLE void copyLoginCode();
+    Q_INVOKABLE void openLoginBrowser();
     bool curseConnected() const;
     int memoryTotal() const {
         return int(moly::physicalMemoryMb());
@@ -237,6 +244,9 @@ class Launcher : public QObject {
     void importScanChanged();
 
   private:
+    QFutureWatcher<QJsonObject> authWatcher;
+    std::atomic_bool authCancelled=false;
+    QString authState="idle",authMessage,authUrl;
     QString root, selection, statusText = "Ready when you are", deviceCode, installErrorText;
     QString activeTaskInstanceId, activeTaskOperation;
     QString retryInstanceId, retryOperation;

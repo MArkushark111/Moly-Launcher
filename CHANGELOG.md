@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1 - Sign in and keep moving
+
+- Give Microsoft sign-in its own background worker and cancellation state instead of disabling the launcher through the global task slot.
+- Show a non-modal top-right sign-in card with selectable/copyable browser code, reopen-browser and Cancel actions. Connected sessions show a green check then fade; errors remain actionable.
+- Keep the account-page code and cancel actions available and clear codes on cancellation or completion.
+
 ## 0.8.0 - Welcome home
 
 - Add a four-step animated welcome experience with instance guidance, live accent/motion preferences, and local/Microsoft account choices. Replay it from Advanced settings.
