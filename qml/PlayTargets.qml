@@ -81,7 +81,7 @@ ColumnLayout {
                     Text { text: targetRow.modelData.status === "online" ? targetRow.modelData.onlinePlayers + " / " + targetRow.modelData.maxPlayers + " online" : ""; color: Theme.textMuted; font.pixelSize: 10; textFormat: Text.PlainText;Layout.alignment:Qt.AlignRight }
                 }
                 MButton {iconName:"more";kind:"ghost";compact:true;Accessible.name:"Options for "+targetRow.modelData.name;onClicked:targetMenu.open()
-                    MMenu {id:targetMenu
+                    MMenu {id:targetMenu;x:parent.width-width;y:parent.height+6
                         MMenuItem{visible:targetRow.modelData.type==="server";text:"Edit server shortcut";iconName:"settings";onTriggered:panel.shell.editServer(targetRow.modelData)}
                         MMenuItem{visible:targetRow.modelData.type==="server";text:"Check connection";iconName:"refresh";onTriggered:playTargets.refreshServer(targetRow.modelData.address)}
                         MMenuItem{visible:targetRow.modelData.type==="server";text:"Copy address";iconName:"copy";onTriggered:playTargets.copyAddress(targetRow.modelData.address)}

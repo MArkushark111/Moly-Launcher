@@ -5,7 +5,8 @@ MenuItem {
     id: control
     property string iconName: ""
     property bool destructive: false
-    implicitHeight: 39
+    implicitHeight: visible ? 39 : 0
+    height: visible ? implicitHeight : 0
     leftPadding: 12; rightPadding: 12
     contentItem: Row {
         spacing: 10
