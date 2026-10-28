@@ -215,3 +215,8 @@ The deterministic suites cover private-address presence redaction and local Disc
 The `--dialog account-chooser`, `--dialog server`, `--dialog browser`, and `--dialog versions` previews expose the new UI. The browser capture targets the secondary window. Identification uses Modrinth exact SHA-1 matches; unavailable or unknown local projects remain local. Discord presence reports navigation and the game/server launched by Moly, not in-game server changes. Live Microsoft authentication remains unverified until Moly has an approved registration.
 
 Recorded 0.7.0 live checks: the dedicated one-click browser installed Iris and its dependency with no confirmation modal, then displayed Installed; Discover's version switch stayed idle until Confirm; a live Iris install/upgrade/downgrade kept exactly one version per project, verified installed checksums, and was identified again by hashes after clearing its tracking manifest. Test files were isolated from the user's instances. Warning/error colors and literal log markup were inspected in the rendered virtualized log view. No new full Minecraft session or Microsoft sign-in is claimed.
+
+
+## 0.8.0 welcome and authentication configuration
+
+All ten suites passed, including a stale-saved-Microsoft-ID regression. The packaged `--verify-intro` check passed step navigation, completion persistence, replay without changing the active account, and confirmed Microsoft configuration. Welcome, appearance, and account steps were rendered and inspected. Diagnostic runs use isolated storage and do not register file associations. Full Microsoft/Minecraft account authorization still needs the user's browser interaction.

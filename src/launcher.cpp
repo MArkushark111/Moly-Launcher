@@ -93,9 +93,11 @@ void Launcher::load() {
                   {"microsoftClientId", QString::fromUtf8(qgetenv("MOLY_MICROSOFT_CLIENT_ID"))}};
     if (!QRegularExpression("^#[0-9a-fA-F]{6}$").match(config["accentColor"].toString()).hasMatch())
         config["accentColor"] = "#8b5cf6";
-    const auto clientOverride=QString::fromUtf8(qgetenv("MOLY_MICROSOFT_CLIENT_ID"));
-    if(!clientOverride.isEmpty())config["microsoftClientId"]=clientOverride;
-    else if(config["microsoftClientId"].toString().isEmpty())config["microsoftClientId"]=QString(MOLY_MICROSOFT_CLIENT_ID);
+    const auto validClient=[](const QString &value){return QRegularExpression("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").match(value).hasMatch();};
+    const auto clientOverride=QString::fromUtf8(qgetenv("MOLY_MICROSOFT_CLIENT_ID")).trimmed();
+    const auto bundledClient=QString(MOLY_MICROSOFT_CLIENT_ID);
+    if(validClient(clientOverride))config["microsoftClientId"]=clientOverride;
+    else if(validClient(bundledClient))config["microsoftClientId"]=bundledClient;
     accountList = readObject(root + "/accounts.json", true)["accounts"].toArray();
     reloadInstances();
     auto cached = readObject(root + "/cache/version-manifest.json", true);
@@ -886,6 +888,7 @@ void Launcher::setUiPreferences(const QVariantMap &values) {
             if(!color.isEmpty()&&!QRegularExpression("^#[0-9a-f]{6}$").match(color).hasMatch())throw Error("Use a six-digit signal color.");
             config["pingColor"]=color;
         }
+        if(values.contains("introVersion"))config["introVersion"]=qBound(0,values["introVersion"].toInt(),1);
         if(values.contains("sidebarWidth"))config["sidebarWidth"]=qBound(160,values["sidebarWidth"].toInt(),260);
         if(values.contains("quickAccessRows"))config["quickAccessRows"]=qBound(1,values["quickAccessRows"].toInt(),8);
         if(values.contains("toastSeconds"))config["toastSeconds"]=qBound(2,values["toastSeconds"].toInt(),15);

@@ -46,7 +46,7 @@ ScrollView {
                     }
                     MButton {
                         text: "Sign in with Microsoft"
-                        iconName:"external"
+                        iconName:"microsoft"
                         kind: "primary"
                         enabled: !launcher.busy
                         onClicked:launcher.signIn()

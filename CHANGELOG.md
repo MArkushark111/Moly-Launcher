@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0 - Welcome home
+
+- Add a four-step animated welcome experience with instance guidance, live accent/motion preferences, and local/Microsoft account choices. Replay it from Advanced settings.
+- Repair empty build-cache and stale saved Microsoft IDs using the bundled Moly registration; add the four-color Microsoft mark to sign-in actions.
+- Remove the CurseForge settings section and register Moly pack files automatically when the normal launcher executable changes. Isolated diagnostic runs do not change Windows associations.
+
 ## 0.7.0 - Make it yours
 
 - Stop treating shared Minecraft and Feather folders as installed Badlion, LabyMod or Dawn instances.

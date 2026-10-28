@@ -208,12 +208,12 @@ Item {
                         RowLayout{Layout.fillWidth:true;Text{text:"Share public server address";color:Theme.text;font.pixelSize:13;Layout.fillWidth:true}MSwitch{checked:launcher.settings.discordShareServer!==false;onClicked:launcher.setUiPreferences({discordShareServer:checked})}}
                         Text{text:"Numeric IPs, localhost and local network names appear as Private server. Presence reflects the server launched through Moly; switching servers inside Minecraft is not detected.";color:Theme.textMuted;font.pixelSize:11;wrapMode:Text.Wrap;Layout.fillWidth:true}
                         Rectangle{Layout.fillWidth:true;height:1;color:Theme.border;Layout.topMargin:4;Layout.bottomMargin:4}
-                        RowLayout{Layout.fillWidth:true;Text{text:"CurseForge";color:Theme.textSecondary;font.pixelSize:13;Layout.fillWidth:true}Badge{text:launcher.curseConnected?"Connected":"Not connected";tint:Theme.textSecondary}}
-                        Text{text:"Your existing CurseForge connection is managed securely by Windows. Modrinth needs no account.";color:Theme.textMuted;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
                     }
                 }
                 Panel{visible:page.section===3;Layout.fillWidth:true
                     ColumnLayout{anchors.fill:parent;spacing:12
+                        RowLayout{Layout.fillWidth:true;Text{text:"Welcome experience";color:Theme.text;font.pixelSize:14;Layout.fillWidth:true}MButton{text:"Replay introduction";iconName:"sparkle";onClicked:shell.replayIntro()}}
+                        Rectangle{Layout.fillWidth:true;height:1;color:Theme.border}
                         Text{text:"Java";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
                         Text{text:"Leave the executable blank for automatic runtime selection.";color:Theme.textSecondary;font.pixelSize:12}
                         MField{id:javaPath;Layout.fillWidth:true;text:page.initialSettings.javaPath||"";placeholderText:"Java executable (automatic)"}
@@ -224,8 +224,6 @@ Item {
                     ColumnLayout{anchors.fill:parent;spacing:12
                         Text{text:"Storage";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
                         RowLayout{Layout.fillWidth:true;Text{text:launcher.dataRoot;color:Theme.textSecondary;font.pixelSize:12;elide:Text.ElideMiddle;Layout.fillWidth:true}MButton{text:"Move storage";iconName:"folder";enabled:!launcher.busy;onClicked:shell.chooseFolder("storage")}}
-                        RowLayout {Layout.fillWidth:true;Text {text:"Moly pack files";color:Theme.text;font.pixelSize:13;Layout.fillWidth:true}MButton {text:"Use Moly for .mlypack";iconName:"file";onClicked:launcher.registerPackFiles()}}
-                        Text {text:"Adds Moly's icon in Explorer and lets you double-click a pack to import it. Applies to your Windows user.";color:Theme.textMuted;font.pixelSize:11;wrapMode:Text.Wrap;Layout.fillWidth:true}
                         Text{text:"Copies files to a new location. Restart Moly afterwards, then repair instances to refresh their paths.";color:Theme.textMuted;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
                     }
                 }

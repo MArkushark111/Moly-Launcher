@@ -2,7 +2,7 @@
 
 Microsoft sign-in has two separate pieces: **the launcher is registered once**, then **players sign in through Microsoft's website**. Players should not normally need to create a Microsoft developer app.
 
-This preview has no Moly-owned application ID included. The Accounts screen and first-run chooser offer Microsoft or local accounts. Application registration is an owner/build task; players are never asked for an ID. An ID is a public identifier for the launcher, not your password or a client secret.
+Moly includes its registered public application ID. The Microsoft device-code endpoint accepted this registration; full Minecraft Services authorization still needs a real account login. The Accounts screen and first-run chooser offer Microsoft or local accounts. Application registration is an owner/build task; players are never asked for an ID. An ID is a public identifier for the launcher, not your password or a client secret.
 
 ## If you just want to play
 

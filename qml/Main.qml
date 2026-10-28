@@ -95,6 +95,7 @@ ApplicationWindow {
     function create() { createDialog.open() }
     function importInstances() { localImport.open() }
     function requestPackImport(path) { window.showNormal();window.raise();window.requestActivate();confirm("importPack","Import this Moly setup?","Moly will copy this pack into a new instance and prepare its game files.\n"+path,path) }
+    function replayIntro() { welcomeIntro.replay() }
     function showAccountChooser() { accountChooser.open() }
     function openTaskCenter() { downloadPanel.open() }
     function showPendingInstance() {if(launcher.pendingPlan.title&&!launcher.busy)installModal.openReview();else downloadPanel.open()}
@@ -107,7 +108,7 @@ ApplicationWindow {
             confirm("quit", "Close Moly?", "A task or game is still running. Closing Moly will cancel its tasks and stop games it launched. Save and close Minecraft first to protect unsaved progress.")
         }
     }
-    Component.onCompleted: {page=launcher.settings.startupPage||"library";if(launcher.settings.launcherFullscreen)showFullScreen();Qt.callLater(function(){if(launcher.settings.showAccountChooser===true || (!launcher.settings.accountSetupDone&&launcher.accounts.length===0))accountChooser.open()})}
+    Component.onCompleted: {page=launcher.settings.startupPage||"library";if(launcher.settings.launcherFullscreen)showFullScreen();Qt.callLater(function(){if(!diagnosticRun&&!launcher.settings.introVersion&&launcher.accounts.length===0)welcomeIntro.replay();else if(launcher.settings.showAccountChooser===true || (!launcher.settings.accountSetupDone&&launcher.accounts.length===0))accountChooser.open()})}
     ColumnLayout {
         objectName:"workspace"
         opacity:startup.ready?1:0
@@ -222,6 +223,7 @@ ApplicationWindow {
         function onGameStarted(){if(launcher.settings.openLogsOnLaunch!==false){window.pendingGameLogs=true;window.navigate("instance");Qt.callLater(window.focusGameLogs);}if(launcher.selected.settings&&launcher.selected.settings.keepVisible!==undefined?!launcher.selected.settings.keepVisible:!launcher.settings.keepVisible)window.showMinimized()}
         function onGameEnded(){if(window.visibility===Window.Minimized)window.showNormal()}
     }
+    Intro {id:welcomeIntro;shell:window}
     AccountChooser {id:accountChooser;shell:window}
     ServerDialog {id:serverDialog}
     function editServer(entry) {serverDialog.edit(entry)}

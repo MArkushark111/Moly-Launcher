@@ -2,11 +2,15 @@
 
 A Windows Minecraft Java Edition launcher built with C++20 and Qt Quick. Moly keeps each Minecraft setup in its own **instance**, so its worlds, mods, resource packs, and shaders stay together.
 
-This is a **0.7.0 preview**. The launcher has working installation and local launch paths; Microsoft sign-in still needs Moly’s owner to register its application. Existing CurseForge credentials stay in Windows Credential Manager.
+This is a **0.8.0 preview**. The launcher has working installation and local launch paths; Microsoft browser sign-in uses Moly’s registered public application. Minecraft Services access and ownership are checked during login. Existing CurseForge credentials stay in Windows Credential Manager.
 
 ## Run the portable build
 
-Extract the entire `MolyLauncher-0.7.0-Windows-x64.zip` archive, then open **MolyLauncher.exe**. Keep the accompanying DLLs and folders beside it. The executable in `dist/MolyLauncher-0.7.0/` is also ready to run without a Qt installation.
+Extract the entire `MolyLauncher-0.8.0-Windows-x64.zip` archive, then open **MolyLauncher.exe**. Keep the accompanying DLLs and folders beside it. The executable in `dist/MolyLauncher-0.8.0/` is also ready to run without a Qt installation.
+
+## Welcome experience
+
+New profiles start with a four-step animated introduction: meet Moly, learn about instances, choose an accent and motion preference, then choose a local or Microsoft account. **Settings → Advanced → Replay introduction** opens it again. Replaying does not remove accounts or instances. Moly registers `.mlypack` files automatically for your Windows user when its executable location changes.
 
 ## First use
 
@@ -93,7 +97,7 @@ Inside the data folder, `instances/<id>/game` holds each instance's game files. 
 .\scripts\build.ps1 -Package
 ```
 
-This prepares the app with its Qt runtime under `dist/MolyLauncher-0.7.0` and creates a ZIP. With an installed Inno Setup compiler, pass its `ISCC.exe` path using `-InnoCompiler` to build the installer described by `packaging/moly.iss`.
+This prepares the app with its Qt runtime under `dist/MolyLauncher-0.8.0` and creates a ZIP. With an installed Inno Setup compiler, pass its `ISCC.exe` path using `-InnoCompiler` to build the installer described by `packaging/moly.iss`.
 
 The packaging recipe does not provide a code-signing certificate. A clean-machine installation test and a signed release are still release tasks. See [THIRD_PARTY.md](THIRD_PARTY.md) for runtime notices and [docs/TESTING.md](docs/TESTING.md) for verification details.
 

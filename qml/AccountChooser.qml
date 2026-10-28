@@ -11,7 +11,7 @@ LiquidDialog {
     contentItem:ColumnLayout {
         id:body;spacing:16
         Text{text:"Choose how you want to play.";color:Theme.textSecondary;font.pixelSize:14;Layout.fillWidth:true}
-        MButton {text:"Sign in with Microsoft";iconName:"external";kind:"primary";Layout.fillWidth:true;enabled:!launcher.busy;onClicked:{if(launcher.microsoftAvailable){launcher.setUiPreferences({accountSetupDone:true});dialog.close();launcher.signIn()}else message.visible=true}}
+        MButton {text:"Sign in with Microsoft";iconName:"microsoft";kind:"primary";Layout.fillWidth:true;enabled:!launcher.busy;onClicked:{if(launcher.microsoftAvailable){launcher.setUiPreferences({accountSetupDone:true});dialog.close();launcher.signIn()}else message.visible=true}}
         Text{id:message;visible:false;text:"Microsoft sign-in is not available in this build yet. Moly's owner needs to finish its app registration. You can use a local account now.";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true;wrapMode:Text.Wrap}
         Rectangle{height:1;color:Theme.border;Layout.fillWidth:true}
         Text{text:"Local account";color:Theme.text;font.pixelSize:15;font.weight:Font.DemiBold}

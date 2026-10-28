@@ -21,6 +21,7 @@ Canvas {
         function circle(x,y,r) { c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.stroke() }
         function rect(x,y,w,h) { c.strokeRect(x,y,w,h) }
         switch(name) {
+        case "microsoft": c.fillStyle="#f25022";c.fillRect(2,2,9,9);c.fillStyle="#7fba00";c.fillRect(13,2,9,9);c.fillStyle="#00a4ef";c.fillRect(2,13,9,9);c.fillStyle="#ffb900";c.fillRect(13,13,9,9);break
         case "library": case "grid": rect(3,3,7,7);rect(14,3,7,7);rect(3,14,7,7);rect(14,14,7,7);break
         case "list": line([8,5,21,5]);line([8,12,21,12]);line([8,19,21,19]);line([3,5,3.1,5]);line([3,12,3.1,12]);line([3,19,3.1,19]);break
         case "discover": circle(12,12,9);line([15.5,8.5,13.5,13.5,8.5,15.5,10.5,10.5,15.5,8.5]);break
