@@ -8,6 +8,14 @@
 #endif
 
 namespace moly {
+MinecraftServiceError::MinecraftServiceError(const HttpError &error):Error(
+    error.status==403?(error.invalidRegistration?
+        "Microsoft and Xbox sign-in succeeded, but Minecraft rejected Moly's app registration. Moly's owner needs to request Minecraft API access before this account can be added.":
+        "Microsoft and Xbox sign-in succeeded, but Minecraft Services denied access (403). Moly may need application approval; this response alone does not confirm the cause. Open access help for the launcher owner."):
+    error.status==401?"Minecraft Services rejected the Xbox session (401). Start a fresh sign-in.":
+    error.status==429?"Minecraft Services is receiving too many requests. Wait before trying again.":
+    "Minecraft Services could not finish sign-in. Try again later."),accessReview(error.status==403) {}
+
 void Secrets::put(const QString &key,const QByteArray &value) {
 #ifdef Q_OS_WIN
     auto name=("MolyLauncher/"+key).toStdWString(); CREDENTIALW c{}; c.Type=CRED_TYPE_GENERIC; c.TargetName=name.data(); c.CredentialBlobSize=DWORD(value.size()); c.CredentialBlob=reinterpret_cast<LPBYTE>(const_cast<char*>(value.constData())); c.Persist=CRED_PERSIST_LOCAL_MACHINE;
@@ -38,7 +46,9 @@ LoginResult Accounts::exchange(const QJsonObject &oauth) {
     auto xsts=net.json("https://xsts.auth.xboxlive.com/xsts/authorize",{{"Properties",QJsonObject{{"SandboxId","RETAIL"},{"UserTokens",QJsonArray{xbox["Token"]}}}},{"RelyingParty","rp://api.minecraftservices.com/"},{"TokenType","JWT"}}).object();
     auto users=xsts["DisplayClaims"].toObject()["xui"].toArray(); if(users.isEmpty() || xsts["Token"].toString().isEmpty()) throw Error("Xbox authorization failed. Check account age restrictions and Xbox profile setup.");
     auto user=users[0].toObject(); QString identity="XBL3.0 x="+user["uhs"].toString()+';'+xsts["Token"].toString();
-    auto mc=net.json("https://api.minecraftservices.com/authentication/login_with_xbox",{{"identityToken",identity}}).object();
+    QJsonObject mc;
+    try{mc=net.json("https://api.minecraftservices.com/authentication/login_with_xbox",{{"identityToken",identity}}).object();}
+    catch(const HttpError &error){throw MinecraftServiceError(error);}
     auto token=mc["access_token"].toString(); if(token.isEmpty()) throw Error("Minecraft authentication failed. This application's client ID may need Minecraft API approval.");
     QMap<QByteArray,QByteArray> headers{{"Authorization","Bearer "+token.toUtf8()}};
     auto ownership=net.json("https://api.minecraftservices.com/entitlements/mcstore",{},headers).object();

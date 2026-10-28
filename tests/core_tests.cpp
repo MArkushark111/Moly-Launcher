@@ -6,10 +6,16 @@
 #include "core.h"
 #include "content.h"
 #include "minecraft.h"
+#include "accounts.h"
 using namespace moly;
 class CoreTests : public QObject {
     Q_OBJECT
 private slots:
+    void minecraftAuthErrorsDoNotConfuseAuthorizationWithOwnership(){
+        MinecraftServiceError denied(HttpError("raw",403,true));QVERIFY(denied.accessReview);QVERIFY(QString::fromUtf8(denied.what()).contains("app registration"));
+        MinecraftServiceError unknown(HttpError("raw",403));QVERIFY(QString::fromUtf8(unknown.what()).contains("does not confirm"));
+        MinecraftServiceError session(HttpError("raw",401));QVERIFY(!session.accessReview);QVERIFY(QString::fromUtf8(session.what()).contains("fresh sign-in"));
+    }
     void offlineIdentity(){QCOMPARE(offlineUuid("Notch"),QString("b50ad385829d3141a2167e7d7539ba7f"));QVERIFY(offlineUuid("Notch")!=offlineUuid("notch"));}
     void pathSafety(){QTemporaryDir d;for(const auto &p:QStringList{"../escape","a/../../x","C:/x","\\\\server\\file","a:stream","CON.txt","a/./x","a/../x","name.","a/ /bad"}){if(p=="a/ /bad")continue;QVERIFY_EXCEPTION_THROWN(safePath(d.path(),p),Error);}QCOMPARE(safePath(d.path(),"mods/a.jar"),d.path()+"/mods/a.jar");QVERIFY_EXCEPTION_THROWN(contentPath(d.path(),"saves/world/level.dat"),Error);}
     void windowsRules(){QVERIFY(rulesAllow({}));QVERIFY(!rulesAllow(QJsonArray{QJsonObject{{"action","allow"},{"os",QJsonObject{{"name","linux"}}}}}));QVERIFY(rulesAllow(QJsonArray{QJsonObject{{"action","allow"}},QJsonObject{{"action","disallow"},{"os",QJsonObject{{"name","osx"}}}}}));QVERIFY(!rulesAllow(QJsonArray{QJsonObject{{"action","allow"},{"features",QJsonObject{{"is_demo_user",true}}}}}));}

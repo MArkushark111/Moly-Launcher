@@ -978,13 +978,13 @@ void Launcher::addOfflineAccount(const QString &name) {
 void Launcher::signIn() {
     if(authWatcher.isRunning())return;
     if(!microsoftAvailable()){emit notice("Microsoft sign-in is not configured in this build.",true);return;}
-    authCancelled=false;deviceCode.clear();authUrl.clear();authState="requesting";authMessage="Requesting a browser code…";emit loginChanged();
+    authCancelled=false;authReview=false;deviceCode.clear();authUrl.clear();authState="requesting";authMessage="Requesting a browser code…";emit loginChanged();
     const auto client=config["microsoftClientId"].toString();
     authWatcher.disconnect(this);
     connect(&authWatcher,&QFutureWatcher<QJsonObject>::finished,this,[this]{
         const auto result=authWatcher.result();deviceCode.clear();authUrl.clear();
         if(authCancelled){authState="cancelled";authMessage="Sign-in cancelled.";}
-        else if(result.contains("error")){authState="error";authMessage=result["error"].toString();}
+        else if(result.contains("error")){authState="error";authMessage=result["error"].toString();authReview=result["accessReview"].toBool();}
         else try {
             const auto account=result["account"].toObject();
             for(qsizetype n=accountList.size()-1;n>=0;--n)if(accountList[n].toObject()["id"]==account["id"])accountList.removeAt(n);
@@ -999,11 +999,12 @@ void Launcher::signIn() {
                 QMetaObject::invokeMethod(this,[this,code,url]{if(authCancelled)return;deviceCode=code;authUrl=url;authState="waiting";authMessage="Finish authorizing Moly in your browser.";emit loginChanged();openLoginBrowser();},Qt::QueuedConnection);
             });
             return QJsonObject{{"account",result.account}};
-        }catch(const std::exception &e){return QJsonObject{{"error",redact(QString::fromUtf8(e.what()))}};}
+        }catch(const MinecraftServiceError &e){return QJsonObject{{"error",QString::fromUtf8(e.what())},{"accessReview",e.accessReview}};}
+        catch(const std::exception &e){return QJsonObject{{"error",redact(QString::fromUtf8(e.what()))}};}
     }));
 }
 void Launcher::cancelSignIn(){if(!authWatcher.isRunning())return;authCancelled=true;deviceCode.clear();authUrl.clear();authState="cancelled";authMessage="Cancelling sign-in…";emit loginChanged();}
-void Launcher::copyLoginCode(){if(!deviceCode.isEmpty())QGuiApplication::clipboard()->setText(deviceCode);}
+void Launcher::copyLoginCode(){if(!deviceCode.isEmpty()){QGuiApplication::clipboard()->setText(deviceCode);emit loginCodeCopied();}}
 void Launcher::openLoginBrowser(){if(!authUrl.isEmpty()&&QUrl(authUrl).scheme()=="https")openLink(authUrl);}
 
 void Launcher::selectAccount(const QString &id) {

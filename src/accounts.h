@@ -7,6 +7,10 @@ public:
     static QByteArray get(const QString &key);
     static void remove(const QString &key);
 };
+struct MinecraftServiceError : Error {
+    bool accessReview;
+    explicit MinecraftServiceError(const HttpError &error);
+};
 struct LoginResult { QJsonObject account; QString minecraftToken; };
 class Accounts {
 public:

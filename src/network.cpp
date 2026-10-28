@@ -51,7 +51,11 @@ QByteArray Network::request(const QString &url, const QByteArray &body, const QB
     reply->deleteLater();
     ctx.check();
     if (error != QNetworkReply::NoError && !(allowError && code >= 400))
-        throw Error(QString("Request failed (%1): %2 — %3").arg(code).arg(QUrl(url).host(), message));
+    {
+        const auto response=QJsonDocument::fromJson(bytes).object();
+        const auto serviceMessage=response["errorMessage"].toString()+response["message"].toString()+response["error"].toString();
+        throw HttpError(QString("Request failed (%1): %2 — %3").arg(code).arg(QUrl(url).host(),message),code,serviceMessage.contains("invalid app registration",Qt::CaseInsensitive));
+    }
     if (bytes.size() > 64 * 1024 * 1024)
         throw Error("Service response exceeds size limit.");
     return bytes;

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.3 - Clear sign-in feedback
+
+- Show a temporary Copied label/check after copying the browser code in either account view or desktop overlay.
+- Preserve HTTP status and a narrowly classified invalid-app-registration flag without displaying raw service responses or tokens.
+- Explain Minecraft authentication-stage 403 errors separately from Microsoft authorization and ownership checks; offer the application access-review link instead of an immediate retry loop.
+
 ## 0.8.2 - Sign-in on your desktop
 
 - Move sign-in status from an in-app popup to a frameless, always-on-top desktop window on the launcher monitor. Keep it independent of launcher minimization and avoid taking keyboard focus from the browser.

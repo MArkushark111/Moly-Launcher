@@ -18,6 +18,9 @@ Window {
     function dismissCard(){fadeIn.stop();fadeOut.restart()}
     NumberAnimation{id:fadeIn;target:panel;property:"opacity";to:1;duration:Theme.motion?180:0}
     SequentialAnimation{id:fadeOut;NumberAnimation{target:panel;property:"opacity";to:0;duration:Theme.motion?350:0}ScriptAction{script:status.hide()}}
+    property bool copied:false
+    Timer{id:copyReset;interval:1800;onTriggered:status.copied=false}
+    Connections{target:launcher;function onLoginCodeCopied(){status.copied=true;copyReset.restart()}function onLoginChanged(){status.copied=false;copyReset.stop()}}
     property string lastUpdate:""
     Connections{target:launcher;function onLoginChanged(){const key=launcher.loginState+"/"+launcher.loginCode+"/"+launcher.loginMessage;if(key===status.lastUpdate)return;status.lastUpdate=key;dismiss.stop();if(launcher.loginState!=="idle"){status.open();if(!status.pending&&launcher.loginState!=="error")dismiss.start()}}}
     Timer{id:dismiss;interval:2800;onTriggered:status.dismissCard()}
@@ -38,14 +41,15 @@ Window {
         Text{text:launcher.loginMessage;color:launcher.loginState==="error"?Theme.danger:Theme.textSecondary;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
         Rectangle {
             visible:!!launcher.loginCode;Layout.fillWidth:true;implicitHeight:58;radius:11;color:Theme.surface2
-            RowLayout{anchors.fill:parent;anchors.margins:10;TextEdit{text:launcher.loginCode;readOnly:true;selectByMouse:true;color:Theme.text;font.family:"Consolas";font.pixelSize:23;font.weight:Font.Bold;Layout.fillWidth:true}MButton{iconName:"copy";kind:"ghost";compact:true;Accessible.name:"Copy Microsoft code";onClicked:launcher.copyLoginCode()}}
+            RowLayout{anchors.fill:parent;anchors.margins:10;TextEdit{text:launcher.loginCode;readOnly:true;selectByMouse:true;color:Theme.text;font.family:"Consolas";font.pixelSize:23;font.weight:Font.Bold;Layout.fillWidth:true}MButton{text:status.copied?"Copied":"";iconName:status.copied?"check":"copy";kind:"ghost";compact:true;labelColor:status.copied?Theme.success:Theme.text;Accessible.name:status.copied?"Code copied":"Copy Microsoft code";onClicked:launcher.copyLoginCode()}}
         }
         RowLayout {
             Layout.fillWidth:true
             MButton{visible:!!launcher.loginCode;text:"Open browser";compact:true;kind:"ghost";onClicked:launcher.openLoginBrowser()}
             Item{Layout.fillWidth:true}
             MButton{visible:status.pending;text:"Cancel sign-in";compact:true;onClicked:launcher.cancelSignIn()}
-            MButton{visible:launcher.loginState==="error";text:"Try again";compact:true;kind:"primary";onClicked:launcher.signIn()}
+            MButton{visible:launcher.loginState==="error"&&launcher.loginNeedsReview;text:"Access help";compact:true;kind:"primary";onClicked:launcher.openLink("https://aka.ms/mce-reviewappid")}
+            MButton{visible:launcher.loginState==="error"&&!launcher.loginNeedsReview;text:"Try again";compact:true;kind:"primary";onClicked:launcher.signIn()}
         }
     }
 }

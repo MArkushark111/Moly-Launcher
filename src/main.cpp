@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include "fileassociation.h"
 #include <QGuiApplication>
+#include <QClipboard>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -46,7 +47,7 @@ static void logMessage(QtMsgType, const QMessageLogContext &, const QString &mes
     if(file.open(QIODevice::WriteOnly|QIODevice::Append))file.write((moly::redact(message)+"\n").toUtf8());
 }
 int main(int argc,char *argv[]) {
-    QGuiApplication app(argc,argv); app.setOrganizationName("Moly");app.setApplicationName("Moly Launcher");app.setApplicationVersion("0.8.2");
+    QGuiApplication app(argc,argv); app.setOrganizationName("Moly");app.setApplicationName("Moly Launcher");app.setApplicationVersion("0.8.3");
     QQuickStyle::setStyle("Basic");
     QFontDatabase::addApplicationFont(":/qt/qml/Moly/assets/Inter.ttf");
     app.setWindowIcon(QIcon(":/qt/qml/Moly/assets/moly.svg"));
@@ -172,7 +173,9 @@ int main(int argc,char *argv[]) {
                 else if(phase==1&&launcher.loginState()=="error"){qWarning("Sign-in probe failed before code arrival.");QCoreApplication::exit(4);heartbeat->stop();}
                 else if(phase==1&&launcher.loginState()=="waiting") {
                     if(++waitingTicks==40){QQuickWindow *overlay=nullptr;for(auto window:QGuiApplication::allWindows())if(window->objectName()=="loginDesktopOverlay")overlay=qobject_cast<QQuickWindow*>(window);
-                        const bool responsive=!launcher.busy()&&!launcher.loginCode().isEmpty()&&overlay&&overlay->isVisible()&&!overlay->transientParent()&&(overlay->flags()&Qt::WindowStaysOnTopHint);launcher.cancelSignIn();phase=responsive?2:3;}
+                        bool copySignal=false;const auto copyConnection=QObject::connect(&launcher,&Launcher::loginCodeCopied,&app,[&copySignal]{copySignal=true;});
+                        launcher.copyLoginCode();QObject::disconnect(copyConnection);
+                        const bool responsive=!launcher.busy()&&!launcher.loginCode().isEmpty()&&overlay&&overlay->isVisible()&&!overlay->transientParent()&&(overlay->flags()&Qt::WindowStaysOnTopHint)&&copySignal&&overlay->property("copied").toBool()&&QGuiApplication::clipboard()->text()==launcher.loginCode();launcher.cancelSignIn();phase=responsive?2:3;}
                 }else if(phase>=2&&launcher.loginState()=="cancelled"&&launcher.loginMessage()=="Sign-in cancelled.") {
                     const bool ok=phase==2&&launcher.loginCode().isEmpty();qInfo("Login UI: event-loop heartbeat during polling, global tasks available, code delivered and cancellation cleared code: %s",ok?"passed":"failed");heartbeat->stop();QCoreApplication::exit(ok?0:4);
                 }

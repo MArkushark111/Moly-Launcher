@@ -3,6 +3,10 @@
 #include <QNetworkAccessManager>
 #include <QUrl>
 namespace moly {
+struct HttpError : Error {
+    int status; bool invalidRegistration;
+    HttpError(const QString &message,int status,bool invalidRegistration=false):Error(message),status(status),invalidRegistration(invalidRegistration){}
+};
 struct Download { QString url,path,hash; QString algorithm="sha1"; qint64 size=-1; qint64 maximumSize=2ll*1024*1024*1024; };
 class Network {
 public:

@@ -4,6 +4,9 @@ import QtQuick.Layouts
 
 ScrollView {
     id: page
+    property bool codeCopied:false
+    Timer{id:copyReset;interval:1800;onTriggered:page.codeCopied=false}
+    Connections{target:launcher;function onLoginCodeCopied(){page.codeCopied=true;copyReset.restart()}function onLoginChanged(){page.codeCopied=false;copyReset.stop()}}
     property var shell
     readonly property bool microsoftConfigured: launcher.microsoftAvailable
     clip:true;contentWidth:availableWidth
@@ -74,7 +77,7 @@ ScrollView {
                             Text { text: "Enter this code on Microsoft's page"; color: Theme.textSecondary; font.pixelSize: 12; wrapMode: Text.Wrap; Layout.fillWidth: true }
                             Text { text: launcher.loginCode; color: Theme.text; font.family: "Consolas"; font.pixelSize: 26; font.weight: Font.Bold; font.letterSpacing: 2 }
                             Text { text: "Finish signing in in your browser. Moly will continue automatically."; color: Theme.textSecondary; font.pixelSize: 12; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                            MButton { text: "Copy code"; kind:"ghost";compact:true;onClicked:launcher.copyLoginCode() }
+                            MButton { text: page.codeCopied?"Copied":"Copy code"; kind:"ghost";compact:true;onClicked:launcher.copyLoginCode() }
                             MButton { text: "Cancel sign-in"; kind: "ghost"; compact: true; onClicked: launcher.cancelSignIn() }
                         }
                     }
