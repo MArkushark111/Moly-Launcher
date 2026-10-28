@@ -223,7 +223,7 @@ ApplicationWindow {
         function onGameStarted(){if(launcher.settings.openLogsOnLaunch!==false){window.pendingGameLogs=true;window.navigate("instance");Qt.callLater(window.focusGameLogs);}if(launcher.selected.settings&&launcher.selected.settings.keepVisible!==undefined?!launcher.selected.settings.keepVisible:!launcher.settings.keepVisible)window.showMinimized()}
         function onGameEnded(){if(window.visibility===Window.Minimized)window.showNormal()}
     }
-    LoginStatus {}
+    LoginStatus {owner:window}
     Intro {id:welcomeIntro;shell:window}
     AccountChooser {id:accountChooser;shell:window}
     ServerDialog {id:serverDialog}

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.2 - Sign-in on your desktop
+
+- Move sign-in status from an in-app popup to a frameless, always-on-top desktop window on the launcher monitor. Keep it independent of launcher minimization and avoid taking keyboard focus from the browser.
+- Retain the code, copy/browser/cancel controls, green success check and fade-away state.
+
 ## 0.8.1 - Sign in and keep moving
 
 - Give Microsoft sign-in its own background worker and cancellation state instead of disabling the launcher through the global task slot.
