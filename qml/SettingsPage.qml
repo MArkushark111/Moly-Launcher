@@ -82,10 +82,13 @@ Item {
                                     { key: "quickAccess", label: "Show worlds and servers in Library" },
                                     { key: "serverPing", label: "Check saved server status" },
                                     { key: "showInstanceRail", label: "Show instance sidebar" },
+                                    { key: "compactRail", label: "Compact instance sidebar tiles" },
                                     { key: "showModCounts", label: "Show mod counts in Library" },
+                                    { key: "showInstanceDates", label: "Show last played dates in Library" },
                                     { key: "showCompletedTasks", label: "Show completed tasks" },
                                     { key: "showQuickAccessRefresh", label: "Show worlds and servers refresh" },
-                                    { key: "openLogsOnLaunch", label: "Show logs when Minecraft starts" }
+                                    { key: "openLogsOnLaunch", label: "Show logs when Minecraft starts" },
+                                    { key: "confirmQuit", label: "Confirm before closing launcher" }
                                 ]
                                 delegate: RowLayout {
                                     required property var modelData
@@ -93,7 +96,7 @@ Item {
                                     spacing: 10
                                     Text { text: modelData.label; color: Theme.text; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.Wrap }
                                     MSwitch {
-                                        checked: launcher.settings[modelData.key] !== false
+                                        checked: launcher.settings[modelData.key] === undefined ? (["compactRail", "confirmQuit"].indexOf(modelData.key) < 0) : launcher.settings[modelData.key] !== false
                                         Accessible.name: modelData.label
                                         onToggled: {
                                             const change = {}
@@ -168,17 +171,28 @@ Item {
                         Text {text:"Make room for your setup";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
                         RowLayout {Layout.fillWidth:true;Text {text:"Instance sidebar width";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}Text {text:Math.round(railWidth.value)+" px";color:Theme.textMuted;font.pixelSize:12}}
                         MSlider {id:railWidth;Layout.fillWidth:true;from:160;to:260;stepSize:10;value:launcher.settings.sidebarWidth||200;onMoved:launcher.setUiPreferences({sidebarWidth:Math.round(value)})}
+                        RowLayout {Layout.fillWidth:true;Text {text:"Library grid card size";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}Text {text:Math.round((gridScale.value || 1.0) * 100)+"%";color:Theme.textMuted;font.pixelSize:12}}
+                        MSlider {id:gridScale;Layout.fillWidth:true;from:0.8;to:1.3;stepSize:0.05;value:launcher.settings.gridCardScale||1.0;onMoved:launcher.setUiPreferences({gridCardScale:value})}
                         RowLayout {Layout.fillWidth:true;Text {text:"Worlds and servers shown in Library";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}MSpinBox {from:1;to:8;value:launcher.settings.quickAccessRows||3;onValueModified:launcher.setUiPreferences({quickAccessRows:value})}}
                         RowLayout {Layout.fillWidth:true;Text {text:"Open Moly on";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}MComboBox {Layout.preferredWidth:180;model:["Library","Discover","Wardrobe"];currentIndex:Math.max(0,["library","discover","skins"].indexOf(launcher.settings.startupPage||"library"));onActivated:launcher.setUiPreferences({startupPage:["library","discover","skins"][currentIndex]})}}
                         RowLayout {Layout.fillWidth:true;Text {text:"Notification duration";color:Theme.textSecondary;font.pixelSize:12;Layout.fillWidth:true}MSpinBox {from:2;to:15;value:launcher.settings.toastSeconds||6;onValueModified:launcher.setUiPreferences({toastSeconds:value})}Text {text:"seconds";color:Theme.textMuted;font.pixelSize:12}}
                     }
                 }
                 Panel{visible:page.section===1;Layout.fillWidth:true
-                    ColumnLayout{anchors.fill:parent;spacing:12
+                    ColumnLayout{anchors.fill:parent;spacing:14
                         Text{text:"Minecraft defaults";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
                         RowLayout{Layout.fillWidth:true;Text{text:"Maximum memory";color:Theme.textSecondary;font.pixelSize:13;Layout.fillWidth:true}Text{text:(ram.value/1024).toFixed(1)+" GB / "+(launcher.memoryTotal/1024).toFixed(1)+" GB available";color:Theme.textSecondary;font.pixelSize:12}}
                         MSlider {id:ram;objectName:"memoryDraftSlider";Layout.fillWidth:true;from:512;to:Math.max(1024,launcher.memoryTotal-1024);stepSize:256;value:page.initialSettings.memoryMb}
                         Text{visible:ram.value>launcher.memoryTotal*0.65;text:"This leaves little memory for Windows and other apps.";color:Theme.danger;font.pixelSize:12}
+                        RowLayout{Layout.fillWidth:true;spacing:10
+                            MButton{text:"2 GB";compact:true;kind:Math.round(ram.value)===2048?"primary":"secondary";onClicked:ram.value=2048}
+                            MButton{text:"4 GB";compact:true;kind:Math.round(ram.value)===4096?"primary":"secondary";onClicked:ram.value=4096}
+                            MButton{text:"6 GB";compact:true;kind:Math.round(ram.value)===6144?"primary":"secondary";onClicked:ram.value=6144}
+                            MButton{text:"8 GB";compact:true;kind:Math.round(ram.value)===8192?"primary":"secondary";enabled:launcher.memoryTotal>9000;onClicked:ram.value=8192}
+                            Item{Layout.fillWidth:true}
+                        }
+                        Rectangle{Layout.fillWidth:true;height:1;color:Theme.border}
+                        Text{text:"Window & display";color:Theme.text;font.pixelSize:14;font.weight:Font.DemiBold}
                         RowLayout{Layout.fillWidth:true;spacing:12
                             Text{text:"Game resolution";color:Theme.textSecondary;font.pixelSize:13}
                             MSpinBox {id:resWidth;from:640;to:7680;stepSize:80;value:page.initialSettings.width;editable:true;Layout.preferredWidth:125}
@@ -190,10 +204,29 @@ Item {
                                 MSwitch{id:fullscreen;checked:page.initialSettings.fullscreen||false;Accessible.name:"Fullscreen"}
                             }
                         }
+                        RowLayout{Layout.fillWidth:true;spacing:8
+                            Text{text:"Presets:";color:Theme.textMuted;font.pixelSize:12}
+                            MButton{text:"1080p";compact:true;kind:"ghost";onClicked:{resWidth.value=1920;resHeight.value=1080}}
+                            MButton{text:"900p";compact:true;kind:"ghost";onClicked:{resWidth.value=1600;resHeight.value=900}}
+                            MButton{text:"720p";compact:true;kind:"ghost";onClicked:{resWidth.value=1280;resHeight.value=720}}
+                            MButton{text:"854×480";compact:true;kind:"ghost";onClicked:{resWidth.value=854;resHeight.value=480}}
+                            Item{Layout.fillWidth:true}
+                        }
+                        Rectangle{Layout.fillWidth:true;height:1;color:Theme.border}
+                        Text{text:"Launcher & launch behavior";color:Theme.text;font.pixelSize:14;font.weight:Font.DemiBold}
                         RowLayout{Layout.fillWidth:true;spacing:9
                             Text{text:"Keep launcher visible while playing";color:Theme.text;font.pixelSize:12;Layout.fillWidth:true}
                             MSwitch{id:keepVisible;checked:page.initialSettings.keepVisible!==false;Accessible.name:"Keep launcher visible while playing"}
                         }
+                        RowLayout{Layout.fillWidth:true;spacing:9
+                            Text{text:"Show game log output automatically when Minecraft launches";color:Theme.text;font.pixelSize:12;Layout.fillWidth:true}
+                            MSwitch{checked:launcher.settings.openLogsOnLaunch!==false;Accessible.name:"Show logs on launch";onToggled:launcher.setUiPreferences({openLogsOnLaunch:checked})}
+                        }
+                        Rectangle{Layout.fillWidth:true;height:1;color:Theme.border}
+                        Text{text:"Java runtime & JVM flags";color:Theme.text;font.pixelSize:14;font.weight:Font.DemiBold}
+                        Text{text:"Global Java and JVM defaults for instances that don't specify their own override.";color:Theme.textMuted;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
+                        MField{id:javaPath;Layout.fillWidth:true;text:page.initialSettings.javaPath||"";placeholderText:"Java executable (automatic if empty)"}
+                        MField{id:jvmArgs;Layout.fillWidth:true;text:page.initialSettings.jvmArgs||"";placeholderText:"Additional JVM arguments (e.g. -XX:+UseG1GC)"}
                     }
                 }
                 Panel{visible:page.section===2;Layout.fillWidth:true
@@ -213,11 +246,15 @@ Item {
                 Panel{visible:page.section===3;Layout.fillWidth:true
                     ColumnLayout{anchors.fill:parent;spacing:12
                         RowLayout{Layout.fillWidth:true;Text{text:"Welcome experience";color:Theme.text;font.pixelSize:14;Layout.fillWidth:true}MButton{text:"Replay introduction";iconName:"sparkle";onClicked:shell.replayIntro()}}
+                        Text{text:"Take the interactive tour of Moly, choose your preferred theme accent, and set up your Minecraft profile.";color:Theme.textMuted;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
                         Rectangle{Layout.fillWidth:true;height:1;color:Theme.border}
-                        Text{text:"Java";color:Theme.text;font.pixelSize:16;font.weight:Font.DemiBold}
-                        Text{text:"Leave the executable blank for automatic runtime selection.";color:Theme.textSecondary;font.pixelSize:12}
-                        MField{id:javaPath;Layout.fillWidth:true;text:page.initialSettings.javaPath||"";placeholderText:"Java executable (automatic)"}
-                        MField{id:jvmArgs;Layout.fillWidth:true;text:page.initialSettings.jvmArgs||"";placeholderText:"Additional JVM arguments (optional)"}
+                        RowLayout{Layout.fillWidth:true;spacing:12
+                            ColumnLayout{Layout.fillWidth:true;spacing:3
+                                Text{text:"Start with Windows";color:Theme.text;font.pixelSize:13}
+                                Text{text:"Open Moly when you sign in to Windows. Saves immediately.";color:Theme.textMuted;font.pixelSize:11}
+                            }
+                            MSwitch{checked:launcher.settings.startWithWindows===true;Accessible.name:"Start with Windows";onClicked:launcher.setUiPreferences({startWithWindows:checked})}
+                        }
                     }
                 }
                 Panel{visible:page.section===3;Layout.fillWidth:true

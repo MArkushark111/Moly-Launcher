@@ -217,25 +217,36 @@ QJsonArray Content::versions(const QJsonObject &project, const QJsonObject &inst
     const auto provider = project["provider"].toString(), type = project["type"].toString();
     auto filter = type == "modpack" ? QJsonObject() : instance;
     if (provider == "Modrinth") {
+        const auto loaderFilter = type == "mod" && !filter.isEmpty() &&
+                                  filter["loader"].toString() != "Vanilla";
+        auto append = [&](const QString &url, bool loaderFilterActive) {
+            for (auto value : net.json(url).array()) {
+                auto version = value.toObject();
+                if (loaderFilterActive &&
+                    !version["loaders"].toArray().contains(filter["loader"].toString().toLower()))
+                    continue;
+                result.append(QJsonObject{{"id", version["id"]},
+                                          {"name", version["version_number"]},
+                                          {"label", version["version_number"].toString()+" · "+version["version_type"].toString()},
+                                          {"channel", version["version_type"]},
+                                          {"published", version["date_published"]}});
+                if (result.size() >= 60)
+                    break;
+            }
+        };
         QString url =
             "https://api.modrinth.com/v2/project/" + encoded(project["projectId"].toString()) + "/version";
         if (!filter.isEmpty()) {
             url += "?game_versions=" + encoded(jsonArray(filter["version"].toString()));
-            if (type == "mod" && filter["loader"] != "Vanilla")
+            if (loaderFilter)
                 url += "&loaders=" + encoded(jsonArray(filter["loader"].toString().toLower()));
         }
-        for (auto value : net.json(url).array()) {
-            auto version = value.toObject();
-            if (type == "mod" && !filter.isEmpty() &&
-                !version["loaders"].toArray().contains(filter["loader"].toString().toLower()))
-                continue;
-            result.append(QJsonObject{{"id", version["id"]},
-                                      {"name", version["version_number"]},
-                                      {"label", version["version_number"].toString()+" · "+version["version_type"].toString()},
-                                      {"channel", version["version_type"]},
-                                      {"published", version["date_published"]}});
-            if (result.size() >= 60)
-                break;
+        append(url, loaderFilter);
+        if (result.isEmpty() && loaderFilter) {
+            // Some mods omit their loader tags entirely; retry with the game
+            // version filter only instead of reporting nothing.
+            append("https://api.modrinth.com/v2/project/" + encoded(project["projectId"].toString()) +
+                   "/version?game_versions=" + encoded(jsonArray(filter["version"].toString())), false);
         }
     } else if (provider == "CurseForge") {
         if (key.isEmpty())
@@ -266,7 +277,7 @@ QJsonArray Content::versions(const QJsonObject &project, const QJsonObject &inst
     if(!currentId.isEmpty()&&!includesCurrent)try {
         if(provider=="Modrinth") {
             const auto version=net.json("https://api.modrinth.com/v2/version/"+encoded(currentId)).object();
-            if(version["project_id"]==project["projectId"]&&(filter.isEmpty()||version["game_versions"].toArray().contains(filter["version"]))&&(type!="mod"||filter.isEmpty()||version["loaders"].toArray().contains(filter["loader"].toString().toLower())))
+            if(version["project_id"]==project["projectId"]&&(filter.isEmpty()||version["game_versions"].toArray().contains(filter["version"]))&&(type!="mod"||filter.isEmpty()||version["loaders"].toArray().isEmpty()||version["loaders"].toArray().contains(filter["loader"].toString().toLower())))
                 result.append(QJsonObject{{"id",version["id"]},{"name",version["version_number"]},{"label",version["version_number"].toString()+" · "+version["version_type"].toString()},{"channel",version["version_type"]},{"published",version["date_published"]}});
         }else if(provider=="CurseForge"&&!key.isEmpty()) {
             const auto version=net.json("https://api.curseforge.com/v1/mods/"+encoded(project["projectId"].toString())+"/files/"+encoded(currentId),{},{{"x-api-key",key.toUtf8()}}).object()["data"].toObject();
@@ -328,7 +339,19 @@ QJsonObject Content::modrinthVersion(const QString &project, const QJsonObject &
                 {"gameVersions", o["game_versions"]},
                 {"loaders", o["loaders"]}};
     }
-    throw Error("No compatible release found for this project and instance.");
+    const auto loader = instance.isEmpty() || QStringList{"Vanilla", ""}.contains(instance["loader"].toString())
+                            ? QString()
+                            : " with " + instance["loader"].toString().toLower();
+    QString label;
+    for (auto v : versions)
+        if (label.isEmpty())
+            label = v.toObject()["version_number"].toString();
+    if (!version.isEmpty())
+        throw Error(QString("Minecraft %1%2 is not supported by version %3.")
+                        .arg(instance.isEmpty() ? QString("this setup") : instance["version"].toString(),
+                             loader, label.isEmpty() ? version : label));
+    throw Error(QString("No compatible release of this project was found for Minecraft %1%2.")
+                    .arg(instance.isEmpty() ? QString("this setup") : instance["version"].toString(), loader));
 }
 QJsonObject Content::curseFile(qint64 project, const QJsonObject &instance, qint64 file) {
     if (key.isEmpty())
@@ -378,7 +401,11 @@ QJsonObject Content::curseFile(qint64 project, const QJsonObject &instance, qint
                 {"dependencies", o["dependencies"]},
                 {"page", QString("https://www.curseforge.com/minecraft/search?search=%1").arg(project)}};
     }
-    throw Error("No compatible CurseForge file was found.");
+    const auto loader = instance.isEmpty() || QStringList{"Vanilla", ""}.contains(instance["loader"].toString())
+                            ? QString()
+                            : " with " + instance["loader"].toString().toLower();
+    throw Error(QString("No compatible CurseForge file was found for Minecraft %1%2.")
+                    .arg(instance.isEmpty() ? QString("this setup") : instance["version"].toString(), loader));
 }
 QJsonObject Content::projectMetadata(const QString &provider, const QString &project,
                                      const QJsonObject &known) {
@@ -444,7 +471,8 @@ QJsonObject Content::projectMetadata(const QString &provider, const QString &pro
 }
 void Content::resolve(const QString &provider, const QString &project, const QString &type,
                       const QJsonObject &instance, QJsonArray &out, QSet<QString> &seen,
-                      const QString &version, const QJsonObject &metadata) {
+                      const QString &version, const QJsonObject &metadata,
+                      bool allowVersionFallback) {
     net.ctx.check();
     QString keyId = provider + '/' + project;
     if (seen.contains(keyId)) {
@@ -462,16 +490,39 @@ void Content::resolve(const QString &provider, const QString &project, const QSt
     auto filter = instance;
     if (type != "mod")
         filter["loader"] = "Vanilla";
-    auto f = provider == "Modrinth" ? modrinthVersion(project, filter, version)
-                                    : curseFile(project.toLongLong(), filter, version.toLongLong());
+    QJsonObject f;
+    if (provider == "Modrinth") {
+        try {
+            f = modrinthVersion(project, filter, version);
+        } catch (const std::exception &error) {
+            const auto text = QString::fromUtf8(error.what());
+            if (!allowVersionFallback || version.isEmpty() || text.contains("not supported by version"))
+                throw;
+            // A pinned dependency can lag behind this instance's game version.
+            // Pick its latest compatible release instead of failing the install.
+            f = modrinthVersion(project, filter, {});
+        }
+    } else
+        f = curseFile(project.toLongLong(), filter, version.toLongLong());
     seen.insert(provider + '/' + f["projectId"].toString());
     const auto info = projectMetadata(provider, f["projectId"].toString(), metadata);
     for (const auto &field : {"title", "icon", "author"})
         if (!info[field].toString().isEmpty())
             f[field] = info[field];
-    if (type == "mod" && provider == "Modrinth" &&
-        !f["loaders"].toArray().contains(instance["loader"].toString().toLower()))
-        throw Error("This dependency does not support the instance's mod loader.");
+    if (type == "mod" && provider == "Modrinth" && !f["loaders"].toArray().isEmpty() &&
+        instance["loader"].toString() != "Vanilla" && !instance["loader"].toString().isEmpty()) {
+        // A version declaring no loaders cannot be verified; Quilt also tolerates Fabric mods.
+        const auto required = instance["loader"].toString().toLower();
+        QJsonArray accepted{required};
+        if (required == "quilt")
+            accepted.append("fabric");
+        bool supported = false;
+        for (auto value : f["loaders"].toArray())
+            if (accepted.contains(value))
+                supported = true;
+        if (!supported)
+            throw Error("This dependency does not support the instance's mod loader.");
+    }
     f["dependency"] = !out.isEmpty();
     f["required"] = true;
     f["type"] = type;
@@ -489,7 +540,7 @@ void Content::resolve(const QString &provider, const QString &project, const QSt
             if (p.isEmpty())
                 throw Error("A required dependency needs manual installation: " +
                             dep["file_name"].toString());
-            resolve(provider, p, "mod", instance, out, seen, ver);
+            resolve(provider, p, "mod", instance, out, seen, ver, {}, true);
         } else if (provider == "CurseForge" && dep["relationType"].toInt() == 3)
             resolve(provider, QString::number(qint64(dep["modId"].toDouble())), "mod", instance, out, seen);
     }

@@ -4,6 +4,7 @@
 /dist/
 /.idea/
 /CMakeUserPresets.json
+/local-secrets.cmake
 /test-data/
 *.user
 *.log

@@ -8,8 +8,9 @@ Item {
     property string targetInstanceId: launcher.selectedId
     readonly property var knownContent: launcher.installedContent
     function installed(project) { return project.type!=="modpack" && knownContent.some(function(f){return f.provider===project.provider && f.projectId===project.projectId}) }
+    function queued(project) { return launcher.queuedInstalls.some(function(item){return item.project.provider===project.provider && item.project.projectId===project.projectId && item.target===(project.type==="modpack"?"":targetInstanceId)}) }
     function install(project) {
-        if(installed(project))return
+        if(installed(project)||queued(project))return
         if(instantInstall && project.type!=="modpack")launcher.beginInstall(project,targetInstanceId,"",true)
         else shell.installProject(project)
     }
@@ -114,7 +115,7 @@ Item {
                 Qt.callLater(page.runSearch);
         }
         function onResultsChanged() {
-            page.syncResults();
+            Qt.callLater(page.syncResults);
             page.started = true;
         }
     }
@@ -318,6 +319,7 @@ Item {
 
             GridView {
                 id: projectGrid
+                objectName: "discoverGrid"
                 anchors.fill: parent
                 visible: launcher.results.length > 0
                 opacity: page.searching ? 0.4 : 1
@@ -364,9 +366,9 @@ Item {
                 }
                 onAtYEndChanged: if (atYEnd)
                     page.maybeLoadMore()
-                onContentYChanged: if (contentY + height > contentHeight - 320)
+                onContentYChanged: if (movingVertically && contentY + height > contentHeight - 320)
                     page.maybeLoadMore()
-                onContentHeightChanged: Qt.callLater(page.maybeLoadMore)
+                onMovementEnded: page.maybeLoadMore()
 
                 delegate: Item {
                     id: cardItem
@@ -549,11 +551,11 @@ Item {
                                     }
                                     MButton {
                                         objectName:"installProject-"+modelData.projectId
-                                        text: page.installed(modelData) ? "Installed" : "Install"
-                                        kind: page.installed(modelData) ? "secondary" : "primary"
+                                        text: page.installed(modelData) ? "Installed" : page.queued(modelData) ? "Queued" : "Install"
+                                        kind: page.installed(modelData) || page.queued(modelData) ? "secondary" : "primary"
                                         implicitHeight: 30
                                         implicitWidth: 84
-                                        enabled: !launcher.busy && !page.installed(modelData)
+                                        enabled: !page.installed(modelData) && !page.queued(modelData)
                                         onClicked: page.install(modelData)
                                     }
                                 }
@@ -839,11 +841,11 @@ Item {
                     onClicked: launcher.openLink(page.detailProject.page || "")
                 }
                 MButton {
-                    text: page.installed(page.detailProject)?"Installed":"Install"
-                    kind: page.installed(page.detailProject)?"secondary":"primary"
+                    text: page.installed(page.detailProject)?"Installed":page.queued(page.detailProject)?"Queued":"Install"
+                    kind: page.installed(page.detailProject)||page.queued(page.detailProject)?"secondary":"primary"
                     Layout.fillWidth: true
                     implicitHeight: 36
-                    enabled: !launcher.busy&&!page.installed(page.detailProject)
+                    enabled: !page.installed(page.detailProject)&&!page.queued(page.detailProject)
                     onClicked: {
                         detailDrawer.close();
                         page.install(page.detailProject);

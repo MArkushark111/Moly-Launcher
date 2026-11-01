@@ -63,12 +63,14 @@ Launcher::Launcher(QString location, QObject *parent) : QObject(parent), root(st
     });
     QTimer::singleShot(0, this, [this] { refreshVersions(false); });
     QTimer::singleShot(250,this,&Launcher::refreshPackIcons);
+    QTimer::singleShot(250,this,&Launcher::refreshAccountSkin);
 }
 Launcher::~Launcher() {
     authCancelled=true;authWatcher.waitForFinished();
     identityCancelled=true;identityWatcher.waitForFinished();
     localScanCancelled=true;localScanWatcher.waitForFinished();
     choicesCancelled=true;choicesWatcher.waitForFinished();
+    skinCancelled=true;skinWatcher.waitForFinished();
     iconCancelled=true;iconWatcher.waitForFinished();
     cancelled = true;
     watcher.waitForFinished();
@@ -212,23 +214,30 @@ QVariantMap Launcher::activeAccount() const {
     return {};
 }
 bool Launcher::curseConnected() const {
-    return !Secrets::get("curseforge").isEmpty() || !qgetenv("MOLY_CURSEFORGE_API_KEY").isEmpty();
+    return !Secrets::get("curseforge").isEmpty() || !qgetenv("MOLY_CURSEFORGE_API_KEY").isEmpty() ||
+           !QString::fromLatin1(MOLY_CURSEFORGE_API_KEY).isEmpty();
 }
+// A user-supplied key wins; otherwise the environment, then the key bundled at build time.
 static QString curseKey() {
     auto k = Secrets::get("curseforge");
-    return QString::fromUtf8(k.isEmpty() ? qgetenv("MOLY_CURSEFORGE_API_KEY") : k);
+    if (!k.isEmpty())
+        return QString::fromUtf8(k);
+    const auto fromEnvironment = qgetenv("MOLY_CURSEFORGE_API_KEY");
+    return QString::fromUtf8(fromEnvironment.isEmpty() ? QByteArray(MOLY_CURSEFORGE_API_KEY) : fromEnvironment);
 }
 void Launcher::selectInstance(const QString &id) {
     if (selection == id)
         return;
-    bool exists = false;
-    for (const auto &instance : instanceList)
-        if (instance["id"] == id) {
-            exists = true;
-            break;
-        }
-    if (!exists)
-        return;
+    if (!id.isEmpty()) {
+        bool exists = false;
+        for (const auto &instance : instanceList)
+            if (instance["id"] == id) {
+                exists = true;
+                break;
+            }
+        if (!exists)
+            return;
+    }
     selection = id;
     emit changed();
     emit logsChanged();
@@ -398,7 +407,9 @@ void Launcher::task(const QString &title, std::function<QJsonObject(Context)> wo
                     emit statusChanged();
                     emit changed();
                 }
-                if (pendingSearch)
+                if (!installQueue.isEmpty())
+                    QTimer::singleShot(0, this, &Launcher::startNextQueuedInstall);
+                if (pendingSearch && installQueue.isEmpty())
                     QTimer::singleShot(0, this, [this] {
                         if (pendingSearch && !working)
                             startSearch(false);
@@ -467,7 +478,7 @@ void Launcher::createInstance(const QString &name, const QString &version, const
             throw Error("Choose a supported loader.");
         if (loader != "Vanilla" && loaderVersion.isEmpty())
             throw Error("Choose a loader version.");
-        auto id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        auto id = instanceFolderId(root + "/instances", name.trimmed().left(80));
         QJsonObject i{{"schemaVersion", 1},      {"id", id},         {"name", name.trimmed().left(80)},
                       {"version", version},      {"loader", loader}, {"loaderVersion", loaderVersion},
                       {"group", "My instances"}, {"icon", "◇"},      {"settings", QJsonObject{}}};
@@ -580,8 +591,8 @@ void Launcher::duplicateInstance() {
         "Duplicating " + i["name"].toString(),
         [i, base](Context c) mutable {
             auto old = safePath(base + "/instances", i["id"].toString());
-            i["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
             i["name"] = i["name"].toString() + " copy";
+            i["id"] = instanceFolderId(base + "/instances", i["name"].toString());
             auto dest = safePath(base + "/instances", i["id"].toString());
             try {
                 copyTree(old + "/game", dest + "/game", c);
@@ -609,12 +620,37 @@ void Launcher::deleteInstance() {
     if (!editable())
         return;
     try {
+        iconCancelled = true;
+        iconWatcher.cancel();
+
+        const auto id = selection;
         auto dir = instanceDir(current());
-        if (!QFile::moveToTrash(dir))
-            throw Error("Windows could not move this instance to the Recycle Bin. Nothing was deleted.");
-        reloadInstances();
+
+        // 1. Clear selection and navigate away
+        selectInstance("");
         emit navigate("library");
+
+        // 2. Remove from the live list immediately and clear artwork URLs.
+        // This forces the UI (sidebar delegates) to be destroyed or update,
+        // releasing file handles to icons/backgrounds (especially GIFs).
+        for (auto it = instanceList.begin(); it != instanceList.end(); ++it) {
+            if ((*it)["id"].toString() == id) {
+                instanceList.erase(it);
+                break;
+            }
+        }
+        emit changed();
+        QCoreApplication::processEvents(); // Allow UI to destroy components and release handles
+
+        // 3. Perform deletion
+        if (!QFile::moveToTrash(dir)) {
+            if (!QDir(dir).removeRecursively())
+                throw Error("Windows could not move this instance to the Recycle Bin, and a permanent delete failed. Close any programs that might be using files in this folder.");
+        }
+
+        reloadInstances();
     } catch (const std::exception &e) {
+        reloadInstances(); // Ensure UI stays in sync even on failure
         emit notice(e.what(), true);
     }
 }
@@ -884,7 +920,7 @@ void Launcher::setReducedMotion(bool enabled) {
 void Launcher::setUiPreferences(const QVariantMap &values) {
     const auto previous=config;
     try {
-        for(const auto &key:QStringList{"animateArtwork","skinIdle","quickAccess","serverPing","showCompletedTasks","libraryGrid","showInstanceRail","showModCounts","openLogsOnLaunch","showQuickAccessRefresh","discordPresence","discordShareServer","showServerMotd","showServerAddress","showAccountChooser","accountSetupDone"})
+        for(const auto &key:QStringList{"animateArtwork","skinIdle","quickAccess","serverPing","showCompletedTasks","libraryGrid","showInstanceRail","showModCounts","openLogsOnLaunch","showQuickAccessRefresh","discordPresence","discordShareServer","showServerMotd","showServerAddress","showAccountChooser","accountSetupDone","showInstanceBadges","showInstanceDates","compactRail","confirmQuit"})
             if(values.contains(key))config[key]=values[key].toBool();
         if(values.contains("pingColor")) {
             const auto color=values["pingColor"].toString().trimmed().toLower();
@@ -893,13 +929,23 @@ void Launcher::setUiPreferences(const QVariantMap &values) {
         }
         if(values.contains("introVersion"))config["introVersion"]=qBound(0,values["introVersion"].toInt(),1);
         if(values.contains("sidebarWidth"))config["sidebarWidth"]=qBound(160,values["sidebarWidth"].toInt(),260);
+        if(values.contains("gridCardScale"))config["gridCardScale"]=qBound(0.8,values["gridCardScale"].toDouble(),1.3);
         if(values.contains("quickAccessRows"))config["quickAccessRows"]=qBound(1,values["quickAccessRows"].toInt(),8);
         if(values.contains("toastSeconds"))config["toastSeconds"]=qBound(2,values["toastSeconds"].toInt(),15);
         if(values.contains("startupPage")&&QStringList{"library","discover","skins"}.contains(values["startupPage"].toString()))config["startupPage"]=values["startupPage"].toString();
         if(values.contains("librarySort")&&QStringList{"manual","name","recent","loader"}.contains(values["librarySort"].toString()))config["librarySort"]=values["librarySort"].toString();
         if(values.contains("backgroundDim"))config["backgroundDim"]=qBound(0.2,values["backgroundDim"].toDouble(),0.95);
+        if(values.contains("startWithWindows")) {
+            const bool enabled=values["startWithWindows"].toBool();
+            setStartWithWindows(QCoreApplication::applicationFilePath(),enabled);
+            config["startWithWindows"]=enabled;
+        }
         writeObject(root+"/settings.json",config);emit changed();
-    }catch(const std::exception &e){config=previous;emit changed();emit notice(QString::fromUtf8(e.what()),true);}
+    }catch(const std::exception &e){
+        if(values.contains("startWithWindows") && config["startWithWindows"]!=previous["startWithWindows"])
+            try{setStartWithWindows(QCoreApplication::applicationFilePath(),previous["startWithWindows"].toBool());}catch(...){}
+        config=previous;emit changed();emit notice(QString::fromUtf8(e.what()),true);
+    }
 }
 void Launcher::clearCompletedJobs() {
     for(qsizetype i=jobList.size()-1;i>=0;--i)if(jobList[i].toMap()["state"]!="Working")jobList.removeAt(i);
@@ -942,7 +988,93 @@ void Launcher::applySkin(const QString &path,const QString &variant) {
     },[this](QJsonObject account){
         for(qsizetype i=0;i<accountList.size();++i)if(accountList[i].toObject()["id"]==account["id"]){accountList[i]=account;break;}
         persist();emit notice("Minecraft account skin updated. Relaunch Minecraft to see the change.",false);
+        refreshAccountSkin();
     },{},"skin");
+}
+// Downloads the active account's Minecraft skin in the background so the
+// wardrobe and the account head icon can show it without user action.
+void Launcher::refreshAccountSkin() {
+    if (skinWatcher.isRunning())
+        return;
+    const auto account = QJsonObject::fromVariantMap(activeAccount());
+    if (account["type"].toString() != "microsoft" || account["id"].toString().isEmpty())
+        return;
+    const auto client = config["microsoftClientId"].toString();
+    if (client.trimmed().isEmpty())
+        return;
+    const auto id = account["id"].toString(), name = account["name"].toString();
+    QString model = account["skinModel"].toString() == "slim" ? "slim" : "classic";
+    skinWatcher.disconnect(this);
+    connect(&skinWatcher, &QFutureWatcher<QJsonObject>::finished, this, [this] {
+        const auto result = skinWatcher.result();
+        if (result.contains("error"))
+            return;
+        try {
+            for (qsizetype n = 0; n < accountList.size(); ++n) {
+                auto entry = accountList[n].toObject();
+                if (entry["id"] != result["id"] || entry["type"] != "microsoft")
+                    continue;
+                entry["skinUrl"] = result["skinUrl"];
+                entry["skinModel"] = result["model"];
+                accountList[n] = entry;
+                persist();
+                break;
+            }
+        } catch (const std::exception &) {}
+        const auto png = result["png"].toString();
+        if (!png.isEmpty())
+            emit accountSkinFound(result["id"].toString(), result["name"].toString(),
+                                  result["model"].toString(), png);
+    });
+    skinWatcher.setFuture(QtConcurrent::run([=, this]() mutable -> QJsonObject {
+        try {
+            Context context;
+            context.cancel = &skinCancelled;
+            auto address = account["skinUrl"].toString();
+            // Mojang's profile service can return plain-text http texture links; use https.
+            if (address.startsWith("http://textures.minecraft.net/"))
+                address = "https://" + address.mid(QString("http://").size());
+            bool refreshed = false;
+            if (address.isEmpty()) {
+                const auto login = Accounts(context).refresh(client, account);
+                address = login.account["skinUrl"].toString();
+                if (login.account["skinModel"].toString() == "slim")
+                    model = "slim";
+                refreshed = true;
+            }
+            QString png;
+            const QUrl check(address);
+            if (check.scheme() == "https" && !check.host().isEmpty() &&
+                (check.host() == "textures.minecraft.net" || check.host().endsWith(".minecraft.net"))) {
+                const auto destination =
+                    safePath(root + "/cache/account-skins",
+                             QString::fromLatin1(QCryptographicHash::hash(address.toUtf8(), QCryptographicHash::Sha256).toHex()) +
+                                 ".png");
+                if (!QFileInfo::exists(destination)) {
+                    Network(context).downloads({{address, destination, {}, "sha1", -1, 1024 * 1024}});
+                    // Re-encode through the guarded PNG path so only image data
+                    // survives the download.
+                    QByteArray bytes;
+                    QBuffer buffer(&bytes);
+                    buffer.open(QIODevice::WriteOnly);
+                    if (!SkinStore::readSkin(destination).save(&buffer, "PNG"))
+                        throw Error("Could not save the account skin.");
+                    writeBytes(destination, bytes);
+                }
+                png = destination;
+            }
+            return {{"id", id},
+                    {"name", name},
+                    {"model", model},
+                    {"skinUrl", address},
+                    {"refreshed", refreshed},
+                    {"png", png}};
+        } catch (const std::exception &e) {
+            return {{"error", QString::fromUtf8(e.what())}};
+        } catch (...) {
+            return {{"error", "Account skins are unavailable right now."}};
+        }
+    }));
 }
 void Launcher::saveCurseKey(const QString &key) {
     try {
@@ -990,6 +1122,7 @@ void Launcher::signIn() {
             for(qsizetype n=accountList.size()-1;n>=0;--n)if(accountList[n].toObject()["id"]==account["id"])accountList.removeAt(n);
             accountList.append(account);config["activeAccount"]=account["id"];persist();
             authState="success";authMessage="Connected as "+account["name"].toString();
+            refreshAccountSkin();
         }catch(const std::exception &e){authState="error";authMessage=redact(QString::fromUtf8(e.what()));}
         emit loginChanged();
     });
@@ -1011,6 +1144,7 @@ void Launcher::selectAccount(const QString &id) {
     try {
         config["activeAccount"] = id;
         persist();
+        refreshAccountSkin();
     } catch (const std::exception &e) {
         emit notice(e.what(), true);
     }
@@ -1234,13 +1368,44 @@ void Launcher::startInstallChoices() {
 void Launcher::beginInstall(const QVariantMap &project, const QString &requestedTarget,
                             const QString &versionId, bool automatic) {
     if (working) {
-        setInstallError("Another task is running. Wait for it to finish or cancel it from the status bar.");
+        if (!automatic) {
+            setInstallError("Another task is running. Confirm this install when it finishes.");
+            return;
+        }
+        if (project.value("type").toString() == "datapack") {
+            setInstallError("Data packs belong to a specific world. Use that world's datapacks folder.");
+            return;
+        }
+        const auto target = project.value("type").toString() == "modpack"
+                                ? QString() : (requestedTarget.isEmpty() ? installTargetId() : requestedTarget);
+        if (project.value("type").toString() != "modpack") {
+            const auto found = std::any_of(instanceList.cbegin(), instanceList.cend(),
+                                           [&](const QJsonObject &instance) { return instance["id"] == target; });
+            if (!found || processes.contains(target)) {
+                setInstallError(found ? "Stop this instance before adding content." : "Choose an instance before adding content.");
+                return;
+            }
+        }
+        const auto id = project.value("provider").toString() + '/' + project.value("projectId").toString()
+                        + '/' + target + '/' + versionId;
+        for (const auto &value : installQueue)
+            if (value.toObject()["id"] == id) return;
+        if (installQueue.size() >= 20) {
+            setInstallError("The install queue is full. Wait for an item to finish.");
+            return;
+        }
+        installQueue.append(QJsonObject{{"id", id}, {"title", project.value("title").toString()},
+                                        {"project", QJsonObject::fromVariantMap(project)},
+                                        {"target", target}, {"version", versionId}});
+        emit installQueueChanged();
+        const auto title=project.value("title").toString();
+        emit notice("Queued " + (title.isEmpty() ? QString("content") : title) + " for installation.", false);
         return;
     }
     automaticInstall = automatic;
     pendingInstance = {};
     if(automatic && project.value("type")=="modpack") {
-        pendingInstance={{"id",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"name",project.value("title").toString()},
+        pendingInstance={{"id",instanceFolderId(root+"/instances",project.value("title").toString())},{"name",project.value("title").toString()},
                          {"iconUrl",project.value("icon").toString()},{"version","Preparing…"},{"loader","Modpack"},{"group","Installing"}};
         emit changed();
     }
@@ -1252,6 +1417,7 @@ void Launcher::beginInstall(const QVariantMap &project, const QString &requested
     if (!versionId.isEmpty())
         data["versionId"] = versionId;
     if (data["type"] == "datapack") {
+        automaticInstall = false;
         setInstallError("Data packs belong to a specific world. Open that world's datapacks folder from "
                         "Files and copy the pack there.");
         return;
@@ -1275,8 +1441,34 @@ void Launcher::beginInstall(const QVariantMap &project, const QString &requested
         }
         planInstall(data.toVariantMap());
     } catch (const std::exception &error) {
+        automaticInstall = false;
         setInstallError(QString::fromUtf8(error.what()));
     }
+}
+void Launcher::removeQueuedInstall(const QString &id) {
+    for (qsizetype index = 0; index < installQueue.size(); ++index)
+        if (installQueue[index].toObject()["id"] == id) {
+            installQueue.removeAt(index);
+            emit installQueueChanged();
+            return;
+        }
+}
+void Launcher::startNextQueuedInstall() {
+    if (working || pendingGameInstall || installQueue.isEmpty() || !review.isEmpty() || automaticInstall) return;
+    const auto next = installQueue.takeAt(0).toObject();
+    emit installQueueChanged();
+    beginInstall(next["project"].toObject().toVariantMap(), next["target"].toString(),
+                 next["version"].toString(), true);
+    if (!working && review.isEmpty() && !installQueue.isEmpty())
+        QTimer::singleShot(0, this, &Launcher::startNextQueuedInstall);
+}
+void Launcher::scheduleGameInstall(const QString &id) {
+    pendingGameInstall = true;
+    QTimer::singleShot(0, this, [this,id] {
+        pendingGameInstall = false;
+        if (!working && selection == id) installSelected();
+        if (!working && !installQueue.isEmpty()) startNextQueuedInstall();
+    });
 }
 void Launcher::planInstall(const QVariantMap &project) {
     if (working)
@@ -1293,8 +1485,14 @@ void Launcher::planInstall(const QVariantMap &project) {
             Content content(base, key, context);
             auto available = content.versions(data, instance);
             if (available.isEmpty())
-                throw Error("No release supports this instance's Minecraft version and loader. Choose "
-                            "another instance or version.");
+                throw Error(QString("No version of %1 supports Minecraft %2%3. Choose another instance or "
+                                    "type of content.")
+                                .arg(data["title"].toString().isEmpty() ? QString("this project")
+                                                                       : data["title"].toString(),
+                                     instance.isEmpty() ? QString("this setup") : instance["version"].toString(),
+                                     instance["loader"].toString() == "Vanilla" || instance["loader"].toString().isEmpty()
+                                         ? QString()
+                                         : " (" + instance["loader"].toString() + ")"));
             auto project = data;
             if (project["versionId"].toString().isEmpty()) {
                 for(auto value:available)if(value.toObject()["channel"].toString("release")=="release"){project["versionId"]=value.toObject()["id"];break;}
@@ -1336,6 +1534,7 @@ void Launcher::dismissPlan() {
     review = {};
     setInstallError({});
     emit planChanged();
+    if (!installQueue.isEmpty()) QTimer::singleShot(0, this, &Launcher::startNextQueuedInstall);
 }
 void Launcher::resolveFile(int index, const QString &url) {
     try {
@@ -1368,7 +1567,9 @@ void Launcher::applyPlan() {
         const bool newInstance = plan.contains("instance");
         if (newInstance) {
             instance = plan["instance"].toObject();
-            instance["id"] = pendingInstance.isEmpty()?QUuid::createUuid().toString(QUuid::WithoutBraces):pendingInstance["id"].toString();
+            instance["id"] = pendingInstance.isEmpty()
+                                 ? instanceFolderId(root + "/instances", instance["name"].toString())
+                                 : pendingInstance["id"].toString();
             instance["schemaVersion"] = 1;
             instance["group"] = "Modpacks";
             instance["icon"] = "◇";
@@ -1410,7 +1611,7 @@ void Launcher::applyPlan() {
                 emit notice(message, false);
                 emit installCompleted(message);
                 if(newInstance)refreshPackIcons();
-                if(newInstance){const auto id=instance["id"].toString();QTimer::singleShot(0,this,[this,id]{if(!working&&selection==id)installSelected();});}
+                if(newInstance)scheduleGameInstall(instance["id"].toString());
             },instance["id"].toString(),"content");
     } catch (const std::exception &error) {
         setInstallError(QString::fromUtf8(error.what()));
@@ -1419,7 +1620,7 @@ void Launcher::applyPlan() {
 void Launcher::importPack(const QString &url,bool prepareGame) {
     if(working)return;
     const auto base=root,key=curseKey(),path=localPath(url);
-    pendingInstance={{"id",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"name",QFileInfo(path).completeBaseName()},
+    pendingInstance={{"id",instanceFolderId(root+"/instances",QFileInfo(path).completeBaseName())},{"name",QFileInfo(path).completeBaseName()},
                      {"iconUrl","qrc:/qt/qml/Moly/assets/moly.svg"},{"version","Reading pack…"},{"loader","Setup"},{"group","Importing"}};
     task("Reading modpack",[=](Context context){
         bool portable=QFileInfo(path).suffix().compare("mlypack",Qt::CaseInsensitive)==0;
@@ -1433,7 +1634,7 @@ void Launcher::importPack(const QString &url,bool prepareGame) {
         if(result.contains("portableInstance")){
             reloadInstances();selectInstance(result["portableInstance"].toObject()["id"].toString());emit navigate("instance");
             emit notice(prepareGame?"Imported your setup. Preparing Minecraft and Java…":"Imported your setup. Install game files to prepare Minecraft and Java.",false);
-            if(prepareGame){const auto id=selection;QTimer::singleShot(0,this,[this,id]{if(!working&&selection==id)installSelected();});}
+            if(prepareGame)scheduleGameInstall(selection);
         }else enrichReview(result);
     },pendingInstance["id"].toString(),"import");
 }
@@ -1464,11 +1665,11 @@ void Launcher::importLocalInstance(const QString &candidateId,const QVariantMap 
     for(auto value:localCandidates)if(value.toObject()["id"]==candidateId)candidate=value.toObject();
     if(candidate.isEmpty()){emit notice("Scan again and select an instance to import.",true);return;}
     for(const auto &key:QStringList{"version","loader","loaderVersion"})if(overrides.contains(key))candidate[key]=QJsonValue::fromVariant(overrides[key]);
-    const auto id=QUuid::createUuid().toString(QUuid::WithoutBraces),base=root;
+    const auto id=instanceFolderId(root+"/instances",candidate["name"].toString()),base=root;
     pendingInstance={{"id",id},{"name",candidate["name"]},{"version",candidate["version"]},{"loader",candidate["loader"]},{"iconUrl",candidate["iconUrl"]},{"group","Importing"}};
     task("Importing "+candidate["name"].toString(),[=](Context context){return InstanceImport::copy(base,candidate,id,worlds,context);},[this](QJsonObject instance){
         pendingInstance={};reloadInstances();selectInstance(instance["id"].toString());emit notice("Setup copied. Preparing Minecraft and Java…",false);
-        const auto id=selection;QTimer::singleShot(0,this,[this,id]{if(!working&&selection==id)installSelected();});
+        scheduleGameInstall(selection);
     },id,"local-import");
 }
 void Launcher::importPrism(const QString &url) {

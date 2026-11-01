@@ -11,6 +11,7 @@ class SkinStore : public QObject {
     Q_PROPERTY(QString selectedSkinId READ selectedSkinId NOTIFY changed)
     Q_PROPERTY(QString selectedSkinUrl READ selectedSkinUrl NOTIFY changed)
     Q_PROPERTY(QString selectedModel READ selectedModel NOTIFY changed)
+    Q_PROPERTY(QVariantMap accountSkins READ accountSkins NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
   public:
     explicit SkinStore(const QString &dataRoot, QObject *parent = nullptr);
@@ -23,6 +24,8 @@ class SkinStore : public QObject {
     Q_INVOKABLE void selectSkin(const QString &id);
     Q_INVOKABLE void setSelectedModel(const QString &model);
     Q_INVOKABLE void requestApply();
+    void setAccountSkin(const QString &id, const QString &name, const QString &model, const QString &pngPath);
+    QVariantMap accountSkins() const;
     static QImage defaultTexture();
     static QImage readSkin(const QString &path);
   signals:

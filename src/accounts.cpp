@@ -55,7 +55,23 @@ LoginResult Accounts::exchange(const QJsonObject &oauth) {
     if(ownership["items"].toArray().isEmpty()) throw Error("This account does not currently have a Minecraft Java Edition entitlement.");
     auto profile=net.json("https://api.minecraftservices.com/minecraft/profile",{},headers).object();
     if(profile["id"].toString().isEmpty() || profile["name"].toString().isEmpty()) throw Error("Minecraft profile not found. Finish setting up Java Edition on minecraft.net.");
+    QString skinUrl,skinModel;
+    for(auto value:profile["skins"].toArray()) {
+        const auto skin=value.toObject();
+        if(!skin["url"].toString().isEmpty() && skin["state"].toString()=="ACTIVE") {
+            skinUrl=skin["url"].toString();
+            skinModel=skin["variant"].toString().compare("slim",Qt::CaseInsensitive)==0?"slim":"classic";
+            break;
+        }
+        if(skinUrl.isEmpty() && !skin["url"].toString().isEmpty()) {
+            skinUrl=skin["url"].toString();
+            skinModel=skin["variant"].toString().compare("slim",Qt::CaseInsensitive)==0?"slim":"classic";
+        }
+    }
+    // Mojang's profile service can return plain-text http texture links; upgrade to https.
+    if(skinUrl.startsWith("http://textures.minecraft.net/")) skinUrl="https://"+skinUrl.mid(QString("http://").size());
     QJsonObject account{{"id",profile["id"]},{"uuid",profile["id"]},{"name",profile["name"]},{"type","microsoft"},{"xuid",user["xid"]}};
+    if(!skinUrl.isEmpty()) {account["skinUrl"]=skinUrl;account["skinModel"]=skinModel;}
     auto refreshToken=oauth["refresh_token"].toString(); if(!refreshToken.isEmpty()) Secrets::put("account/"+profile["id"].toString(),refreshToken.toUtf8());
     return {account,token};
 }

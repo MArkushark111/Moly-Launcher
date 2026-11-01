@@ -316,7 +316,7 @@ Item {
                                     Layout.preferredWidth: 48
                                 }
                                 Text {
-                                    visible: page.width > 850
+                                    visible: page.width > 850 && launcher.settings.showInstanceDates !== false
                                     text: page.lastPlayed(row.modelData.lastPlayed)
                                     color: Theme.textMuted
                                     font.pixelSize: 12
@@ -352,8 +352,9 @@ Item {
                     Layout.fillHeight: true
                     model: page.visibleInstances
                     clip: true
-                    cellWidth: width / Math.max(2, Math.floor(width / 260))
-                    cellHeight: 160
+                    readonly property real cardScale: launcher.settings.gridCardScale || 1.0
+                    cellWidth: width / Math.max(2, Math.floor(width / Math.round(260 * cardScale)))
+                    cellHeight: Math.round(160 * cardScale)
                     ScrollBar.vertical: ScrollBar {}
                     delegate: Item {
                         required property var modelData
@@ -423,9 +424,14 @@ Item {
                                 }
                                 RowLayout {
                                     Text {
+                                        visible: launcher.settings.showInstanceDates !== false
                                         text: modelData.installing ? "Installing…" : modelData._pending ? modelData.status : modelData.running ? "Running" : page.lastPlayed(modelData.lastPlayed)
                                         color: modelData.running ? Theme.success : Theme.textMuted
                                         font.pixelSize: 11
+                                        Layout.fillWidth: true
+                                    }
+                                    Item {
+                                        visible: launcher.settings.showInstanceDates === false
                                         Layout.fillWidth: true
                                     }
                                     ReorderHandle {instanceId:modelData.id;available:!modelData._pending;Layout.preferredWidth:20;Layout.preferredHeight:28}

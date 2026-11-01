@@ -12,6 +12,34 @@ SkinModel::SkinModel(QQuickItem *parent) : QQuickPaintedItem(parent), texture(Sk
     connect(this, &QQuickItem::widthChanged, this, [this] { update(); });
     connect(this, &QQuickItem::heightChanged, this, [this] { update(); });
 }
+SkinHead::SkinHead(QQuickItem *parent) : QQuickPaintedItem(parent), texture(SkinStore::defaultTexture()) {
+    setAntialiasing(false); setOpaquePainting(false);
+    connect(this, &QQuickItem::widthChanged, this, [this] { update(); });
+    connect(this, &QQuickItem::heightChanged, this, [this] { update(); });
+}
+void SkinHead::setSource(const QUrl &url) {
+    if (url == skinSource) return;
+    skinSource = url;
+    try { texture = url.isLocalFile() ? SkinStore::readSkin(url.toLocalFile()) : SkinStore::defaultTexture(); }
+    catch (...) { texture = SkinStore::defaultTexture(); }
+    emit sourceChanged(); update();
+}
+void SkinHead::paint(QPainter *painter) {
+    if (width() < 1 || height() < 1) return;
+    const auto face = SkinModel::textureRect(SkinModel::Head, SkinModel::Front);
+    const auto hat = texture.height() == 64
+                         ? SkinModel::textureRect(SkinModel::Head, SkinModel::Front, false, true)
+                         : QRect();
+    // Small inset so the hat layer's silhouette keeps a little breathing room.
+    const qreal pad = qMin(width(), height()) * 0.05;
+    const qreal cell = (qMin(width(), height()) - 2 * pad) / 8.0;
+    const QPointF origin((width() - cell * 8) / 2, (height() - cell * 8) / 2);
+    const QRectF target(origin, QSizeF(cell * 8, cell * 8));
+    painter->setRenderHint(QPainter::SmoothPixmapTransform, false);
+    painter->drawImage(target, texture, face);
+    if (!hat.isEmpty())
+        painter->drawImage(target, texture, hat);
+}
 void SkinModel::setSource(const QUrl &url) {
     if (url == skinSource) return;
     skinSource = url;

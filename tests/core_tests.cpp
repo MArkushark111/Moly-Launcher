@@ -17,6 +17,21 @@ private slots:
         MinecraftServiceError session(HttpError("raw",401));QVERIFY(!session.accessReview);QVERIFY(QString::fromUtf8(session.what()).contains("fresh sign-in"));
     }
     void offlineIdentity(){QCOMPARE(offlineUuid("Notch"),QString("b50ad385829d3141a2167e7d7539ba7f"));QVERIFY(offlineUuid("Notch")!=offlineUuid("notch"));}
+    void instanceFolderNaming(){
+        QTemporaryDir d;
+        const auto instances=d.path();
+        QCOMPARE(instanceFolderId(instances,"Main"),QString("Main"));
+        QVERIFY(QDir(instances).mkpath("Main"));
+        // Existing folders stay intact; a second "Main" becomes a unique suffix.
+        QCOMPARE(instanceFolderId(instances,"Main"),QString("Main (2)"));
+        QCOMPARE(instanceFolderId(instances,"My <Fancy>: server? "),QString("My Fancy server"));
+        const auto sanitized=instanceFolderId(instances,"Bad\\Name/Here");
+        QCOMPARE(sanitized,QString("Bad Name Here"));
+        QVERIFY(QDir(instances).mkpath(sanitized));
+        QCOMPARE(instanceFolderId(instances,"CON"),QString("CON-instance"));
+        // Nothing printable remaining falls back to a UUID.
+        QCOMPARE(instanceFolderId(instances,"<>:\"/\\|?*").size(),36);
+    }
     void pathSafety(){QTemporaryDir d;for(const auto &p:QStringList{"../escape","a/../../x","C:/x","\\\\server\\file","a:stream","CON.txt","a/./x","a/../x","name.","a/ /bad"}){if(p=="a/ /bad")continue;QVERIFY_EXCEPTION_THROWN(safePath(d.path(),p),Error);}QCOMPARE(safePath(d.path(),"mods/a.jar"),d.path()+"/mods/a.jar");QVERIFY_EXCEPTION_THROWN(contentPath(d.path(),"saves/world/level.dat"),Error);}
     void windowsRules(){QVERIFY(rulesAllow({}));QVERIFY(!rulesAllow(QJsonArray{QJsonObject{{"action","allow"},{"os",QJsonObject{{"name","linux"}}}}}));QVERIFY(rulesAllow(QJsonArray{QJsonObject{{"action","allow"}},QJsonObject{{"action","disallow"},{"os",QJsonObject{{"name","osx"}}}}}));QVERIFY(!rulesAllow(QJsonArray{QJsonObject{{"action","allow"},{"features",QJsonObject{{"is_demo_user",true}}}}}));}
     void argsAndMaven(){QCOMPARE(mavenPath("net.fabricmc:fabric-loader:0.16.0"),QString("net/fabricmc/fabric-loader/0.16.0/fabric-loader-0.16.0.jar"));QCOMPARE(mavenPath("org.lwjgl:lwjgl:3.3.3:natives-windows"),QString("org/lwjgl/lwjgl/3.3.3/lwjgl-3.3.3-natives-windows.jar"));QCOMPARE(argumentValues(QJsonArray{"hello",QJsonObject{{"rules",QJsonArray{QJsonObject{{"action","allow"},{"features",QJsonObject{{"has_custom_resolution",true}}}}}},{"value",QJsonArray{"--width","${resolution_width}"}}}},{{"has_custom_resolution",true}}).size(),3);}

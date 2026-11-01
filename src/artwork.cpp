@@ -20,19 +20,23 @@ QNetworkAccessManager *coverNetwork(){static QPointer<QNetworkAccessManager> man
 
 ArtworkView::ArtworkView(QQuickItem *parent):QQuickPaintedItem(parent),movie_(this){
     setAntialiasing(true);movie_.setCacheMode(QMovie::CacheNone);
-    connect(&movie_,&QMovie::frameChanged,this,[this]{update();});
+    connect(&movie_,&QMovie::frameChanged,this,[this]{
+        auto frame=movie_.currentImage();
+        {QMutexLocker lock(&imageMutex_);movieFrame_=std::move(frame);}
+        update();emit appearanceChanged();
+    });
     connect(this,&QQuickItem::visibleChanged,this,[this]{if(animated_&&!movie_.fileName().isEmpty()&&movie_.isValid())movie_.setPaused(!isVisible());});
 }
 ArtworkView::~ArtworkView(){if(pendingReply_){pendingReply_->disconnect(this);pendingReply_->abort();pendingReply_->deleteLater();}}
 void ArtworkView::setSource(const QUrl &url){if(source_==url)return;source_=url;reload();emit appearanceChanged();}
-void ArtworkView::setRadius(qreal value){radius_=qMax(0.0,value);update();emit appearanceChanged();}
-void ArtworkView::setShade(qreal value){shade_=qBound(0.0,value,1.0);update();emit appearanceChanged();}
+void ArtworkView::setRadius(qreal value){{QMutexLocker lock(&imageMutex_);radius_=qMax(0.0,value);}update();emit appearanceChanged();}
+void ArtworkView::setShade(qreal value){{QMutexLocker lock(&imageMutex_);shade_=qBound(0.0,value,1.0);}update();emit appearanceChanged();}
 void ArtworkView::setAnimated(bool value){if(animated_==value)return;animated_=value;reload();emit appearanceChanged();}
 void ArtworkView::reload(){
     if(pendingReply_){pendingReply_->disconnect(this);pendingReply_->abort();pendingReply_->deleteLater();pendingReply_=nullptr;}
-    movie_.stop();movie_.setFileName({});still_={};
+    movie_.stop();movie_.setFileName({});{QMutexLocker lock(&imageMutex_);still_={};movieFrame_={};}
     if(source_.scheme()=="https"&&!source_.host().isEmpty()&&source_.userInfo().isEmpty()) {
-        if(const auto cached=coverCache.object(source_.toString())){still_=*cached;update();return;}
+        if(const auto cached=coverCache.object(source_.toString())){{QMutexLocker lock(&imageMutex_);still_=*cached;}update();return;}
         QNetworkRequest request(source_);request.setTransferTimeout(15000);request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::NoLessSafeRedirectPolicy);
         request.setHeader(QNetworkRequest::UserAgentHeader,"MArkushark111/Moly-Launcher/0.7.0");
         auto reply=coverNetwork()->get(request);pendingReply_=reply;auto bytes=std::make_shared<QByteArray>();
@@ -41,7 +45,7 @@ void ArtworkView::reload(){
             if(pendingReply_!=reply){reply->deleteLater();return;}pendingReply_=nullptr;
             if(reply->error()==QNetworkReply::NoError&&bytes->size()+reply->bytesAvailable()<=8*1024*1024){
                 bytes->append(reply->readAll());QBuffer buffer(bytes.get());buffer.open(QIODevice::ReadOnly);QImageReader reader(&buffer);const auto size=reader.size();
-                if(size.isValid()&&size.width()<=8192&&size.height()<=8192&&qint64(size.width())*size.height()<=16*1024*1024){reader.setAutoTransform(true);reader.setScaledSize(size.scaled(512,512,Qt::KeepAspectRatio));still_=reader.read();if(!still_.isNull())coverCache.insert(source_.toString(),new QImage(still_),qMax(1,int(still_.sizeInBytes()/1024)));}
+                if(size.isValid()&&size.width()<=8192&&size.height()<=8192&&qint64(size.width())*size.height()<=16*1024*1024){reader.setAutoTransform(true);reader.setScaledSize(size.scaled(512,512,Qt::KeepAspectRatio));auto decoded=reader.read();if(!decoded.isNull()){coverCache.insert(source_.toString(),new QImage(decoded),qMax(1,int(decoded.sizeInBytes()/1024)));QMutexLocker lock(&imageMutex_);still_=std::move(decoded);}}
             }
             reply->deleteLater();update();emit appearanceChanged();
         });
@@ -52,7 +56,7 @@ void ArtworkView::reload(){
         if(value.startsWith(prefix)&&value.size()<=128*1024) {
             auto bytes=QByteArray::fromBase64(value.mid(prefix.size()).toLatin1(),QByteArray::AbortOnBase64DecodingErrors);
             QBuffer buffer(&bytes);buffer.open(QIODevice::ReadOnly);QImageReader reader(&buffer,"PNG");const auto size=reader.size();
-            if(!bytes.isEmpty()&&bytes.size()<=64*1024&&size.width()>0&&size.height()>0&&size.width()<=256&&size.height()<=256)still_=reader.read();
+            if(!bytes.isEmpty()&&bytes.size()<=64*1024&&size.width()>0&&size.height()>0&&size.width()<=256&&size.height()<=256){auto decoded=reader.read();QMutexLocker lock(&imageMutex_);still_=std::move(decoded);}
         }
         update();return;
     }
@@ -60,16 +64,18 @@ void ArtworkView::reload(){
     const auto path=source_.toLocalFile();QImageReader reader(path);const auto size=reader.size();
     if(animated_&&reader.format().toLower()=="gif"){
         movie_.setFileName(path);movie_.setScaledSize(size.scaled(512,512,Qt::KeepAspectRatio));movie_.start();movie_.setPaused(!isVisible());
-    }else{reader.setScaledSize(size.scaled(512,512,Qt::KeepAspectRatio));still_=reader.read();}
+    }else{reader.setScaledSize(size.scaled(512,512,Qt::KeepAspectRatio));auto decoded=reader.read();QMutexLocker lock(&imageMutex_);still_=std::move(decoded);}
     update();
 }
 void ArtworkView::paint(QPainter *painter){
-    const auto image=!movie_.fileName().isEmpty()?movie_.currentImage():still_;
+    QImage image;
+    qreal radius,shade;
+    {QMutexLocker lock(&imageMutex_);image=movieFrame_.isNull()?still_:movieFrame_;radius=radius_;shade=shade_;}
     if(image.isNull()||width()<=0||height()<=0)return;
-    QPainterPath clip;clip.addRoundedRect(boundingRect(),radius_,radius_);painter->setClipPath(clip);painter->setRenderHint(QPainter::SmoothPixmapTransform);
+    QPainterPath clip;clip.addRoundedRect(boundingRect(),radius,radius);painter->setClipPath(clip);painter->setRenderHint(QPainter::SmoothPixmapTransform);
     const auto size=QSizeF(image.size()).scaled(boundingRect().size(),Qt::KeepAspectRatioByExpanding);
     painter->drawImage(QRectF((width()-size.width())/2,(height()-size.height())/2,size.width(),size.height()),image);
-    painter->fillPath(clip,QColor(0,0,0,qRound(shade_*255)));
+    painter->fillPath(clip,QColor(0,0,0,qRound(shade*255)));
 }
 
 namespace moly {

@@ -29,4 +29,31 @@ void registerMolyPackFiles(const QString &executable) {
     throw Error("File registration is currently available on Windows.");
 #endif
 }
+void setStartWithWindows(const QString &executable, bool enabled) {
+#ifdef Q_OS_WIN
+    const auto path=QDir::toNativeSeparators(QFileInfo(executable).absoluteFilePath());
+    if(enabled && (!QFileInfo(path).isFile() || path.contains('"')))
+        throw Error("The launcher executable could not be added to Windows startup.");
+    HKEY key=nullptr;
+    constexpr wchar_t runKey[]=L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    const auto opened=RegCreateKeyExW(HKEY_CURRENT_USER,runKey,0,nullptr,0,KEY_SET_VALUE,nullptr,&key,nullptr);
+    if(opened!=ERROR_SUCCESS)throw Error("Windows could not open your startup settings.");
+    LONG result=ERROR_SUCCESS;
+    if(enabled) {
+        const QString command='"'+path+'"';
+        result=RegSetValueExW(key,L"MolyLauncher",0,REG_SZ,
+                              reinterpret_cast<const BYTE*>(command.utf16()),
+                              DWORD((command.size()+1)*sizeof(wchar_t)));
+    } else {
+        result=RegDeleteValueW(key,L"MolyLauncher");
+        if(result==ERROR_FILE_NOT_FOUND)result=ERROR_SUCCESS;
+    }
+    RegCloseKey(key);
+    if(result!=ERROR_SUCCESS)throw Error("Windows could not update Moly's startup entry.");
+#else
+    Q_UNUSED(executable)
+    Q_UNUSED(enabled)
+    throw Error("Start with Windows is available on Windows only.");
+#endif
+}
 }

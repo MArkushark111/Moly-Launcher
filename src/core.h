@@ -21,6 +21,7 @@ void writeObject(const QString &path, const QJsonObject &object);
 void writeBytes(const QString &path, const QByteArray &bytes);
 QString safePath(const QString &root, const QString &relative);
 QString offlineUuid(const QString &name);
+QString instanceFolderId(const QString &instancesRoot, const QString &name);
 QString redact(QString text, const QStringList &secrets = {});
 QString fileHash(const QString &path, const QString &algorithm = "sha1");
 void extractZip(const QString &zip, const QString &destination, const QString &prefix = {}, bool natives = false, const Context &context = {}, bool atomicWrites = true);

@@ -31,3 +31,20 @@ class SkinModel : public QQuickPaintedItem {
     qreal rotation = -24, motionPose = 0;
     bool slimModel = false;
 };
+
+// Flat 2D head portrait drawn from a 64 × 64 (or legacy 64 × 32) skin file,
+// used for account avatars. Shows the hat/overlay layer on top when present.
+class SkinHead : public QQuickPaintedItem {
+    Q_OBJECT
+    Q_PROPERTY(QUrl source READ source WRITE setSource NOTIFY sourceChanged)
+  public:
+    explicit SkinHead(QQuickItem *parent = nullptr);
+    void paint(QPainter *painter) override;
+    QUrl source() const { return skinSource; }
+    void setSource(const QUrl &url);
+  signals:
+    void sourceChanged();
+  private:
+    QUrl skinSource;
+    QImage texture;
+};

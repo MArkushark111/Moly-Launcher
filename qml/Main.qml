@@ -103,9 +103,9 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+N"; onActivated: create() }
     Shortcut { sequence: "Alt+Left"; enabled:page==="instance"; onActivated:navigate("library") }
     onClosing: function(close) {
-        if (!forceQuit && (launcher.busy || launcher.instances.some(function(i) { return i.running }))) {
+        if (!forceQuit && (launcher.settings.confirmQuit === true || launcher.busy || launcher.instances.some(function(i) { return i.running }))) {
             close.accepted = false
-            confirm("quit", "Close Moly?", "A task or game is still running. Closing Moly will cancel its tasks and stop games it launched. Save and close Minecraft first to protect unsaved progress.")
+            confirm("quit", "Close Moly?", launcher.instances.some(function(i) { return i.running }) ? "A task or game is still running. Closing Moly will cancel its tasks and stop games it launched. Save and close Minecraft first to protect unsaved progress." : "Are you sure you want to exit Moly Launcher?")
         }
     }
     Component.onCompleted: {page=launcher.settings.startupPage||"library";if(launcher.settings.launcherFullscreen)showFullScreen();Qt.callLater(function(){if(!diagnosticRun&&!launcher.settings.introVersion&&launcher.accounts.length===0)welcomeIntro.replay();else if(launcher.settings.showAccountChooser===true || (!launcher.settings.accountSetupDone&&launcher.accounts.length===0))accountChooser.open()})}
@@ -140,24 +140,57 @@ ApplicationWindow {
                         delegate:ItemDelegate {
                             id:instanceTile
                             required property var modelData
-                            width:ListView.view.width;height:100;padding:0
+                            readonly property bool isCompact: launcher.settings.compactRail === true
+                            width:ListView.view.width;height:isCompact?52:100;padding:0
                             Accessible.name:modelData.name
                             onClicked:{if(modelData._pending)window.showPendingInstance();else{launcher.selectInstance(modelData.id);window.page="instance"}}
                             background:Rectangle {
-                                radius:17
+                                radius:instanceTile.isCompact?10:17
                                 color:instanceTile.modelData.installing?Theme.app:window.page==="instance"&&launcher.selectedId===instanceTile.modelData.id?Theme.accentSoft:instanceTile.hovered?Theme.surface2:Theme.surface
                                 border.color:instanceTile.activeFocus?Theme.accent:Theme.border
                                 border.width:instanceTile.activeFocus?2:1
-                                ArtworkView {anchors.fill:parent;radius:17;source:instanceTile.modelData.backgroundUrl||"";opacity:instanceTile.modelData.installing?0.4:1;shade:launcher.settings.backgroundDim===undefined?0.5:launcher.settings.backgroundDim;animated:Theme.motion&&launcher.settings.animateArtwork!==false}
+                                ArtworkView {anchors.fill:parent;radius:instanceTile.isCompact?10:17;source:instanceTile.modelData.backgroundUrl||"";opacity:instanceTile.modelData.installing?0.4:1;shade:launcher.settings.backgroundDim===undefined?0.5:launcher.settings.backgroundDim;animated:Theme.motion&&launcher.settings.animateArtwork!==false}
                                 Behavior on color {ColorAnimation{duration:Theme.motion?160:0}}
                             }
                             DropArea { anchors.fill:parent;keys:["moly-instance"];onDropped:function(drop){if(drop.source&&drop.source.instanceId!==instanceTile.modelData.id&&!instanceTile.modelData._pending){const id=drop.source.instanceId,target=instanceTile.modelData.id,after=drop.y>height/2;Qt.callLater(function(){launcher.moveInstance(id,target,after)});drop.acceptProposedAction()}};Rectangle {visible:parent.containsDrag;anchors.top:parent.top;width:parent.width;height:3;radius:2;color:Theme.accent} }
                             contentItem:Item {
-                                InstanceAvatar {width:34;height:34;anchors.horizontalCenter:parent.horizontalCenter;anchors.top:parent.top;anchors.topMargin:12;imageSource:instanceTile.modelData.iconUrl||"";opacity:instanceTile.modelData.installing?0.45:1}
-                                Text {anchors.left:parent.left;anchors.right:parent.right;anchors.leftMargin:10;anchors.rightMargin:10;y:53;height:20;text:instanceTile.modelData.name;color:Theme.text;font.family:Theme.fontFamily;font.pixelSize:12;font.weight:Font.DemiBold;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter;elide:Text.ElideRight}
-                                ArcSpinner { visible:instanceTile.modelData.installing;width:18;height:18;anchors.horizontalCenter:parent.horizontalCenter;y:20 }
-                                ReorderHandle { instanceId:instanceTile.modelData.id;available:!instanceTile.modelData._pending;width:20;height:26;x:parent.width-23;y:5 }
-                                Text {anchors.left:parent.left;anchors.right:parent.right;anchors.leftMargin:10;anchors.rightMargin:10;y:76;height:14;text:instanceTile.modelData.installing?("Installing"+(launcher.progress>=0&&launcher.taskInstanceId===instanceTile.modelData.id?" · "+Math.round(launcher.progress*100)+"%":"…")):instanceTile.modelData._pending?instanceTile.modelData.status:instanceTile.modelData.running?"Running":instanceTile.modelData.loader+" · "+instanceTile.modelData.version;color:instanceTile.modelData.running?Theme.success:Theme.textMuted;font.pixelSize:10;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter;elide:Text.ElideRight}
+                                InstanceAvatar {
+                                    width:instanceTile.isCompact?28:34;height:instanceTile.isCompact?28:34
+                                    anchors.left:instanceTile.isCompact?parent.left:undefined
+                                    anchors.leftMargin:instanceTile.isCompact?10:0
+                                    anchors.horizontalCenter:instanceTile.isCompact?undefined:parent.horizontalCenter
+                                    anchors.verticalCenter:instanceTile.isCompact?parent.verticalCenter:undefined
+                                    anchors.top:instanceTile.isCompact?undefined:parent.top
+                                    anchors.topMargin:instanceTile.isCompact?0:12
+                                    imageSource:instanceTile.modelData.iconUrl||""
+                                    opacity:instanceTile.modelData.installing?0.45:1
+                                }
+                                Text {
+                                    anchors.left:instanceTile.isCompact?parent.left:parent.left
+                                    anchors.right:instanceTile.isCompact?parent.right:parent.right
+                                    anchors.leftMargin:instanceTile.isCompact?46:10
+                                    anchors.rightMargin:instanceTile.isCompact?24:10
+                                    y:instanceTile.isCompact?8:53
+                                    height:20
+                                    text:instanceTile.modelData.name
+                                    color:Theme.text;font.family:Theme.fontFamily;font.pixelSize:instanceTile.isCompact?11:12;font.weight:Font.DemiBold
+                                    horizontalAlignment:instanceTile.isCompact?Text.AlignLeft:Text.AlignHCenter
+                                    verticalAlignment:Text.AlignVCenter;elide:Text.ElideRight
+                                }
+                                ArcSpinner { visible:instanceTile.modelData.installing;width:18;height:18;anchors.horizontalCenter:instanceTile.isCompact?undefined:parent.horizontalCenter;anchors.left:instanceTile.isCompact?parent.left:undefined;anchors.leftMargin:instanceTile.isCompact?15:0;y:instanceTile.isCompact?17:20 }
+                                ReorderHandle { instanceId:instanceTile.modelData.id;available:!instanceTile.modelData._pending;width:20;height:26;x:parent.width-23;y:instanceTile.isCompact?13:5 }
+                                Text {
+                                    anchors.left:instanceTile.isCompact?parent.left:parent.left
+                                    anchors.right:instanceTile.isCompact?parent.right:parent.right
+                                    anchors.leftMargin:instanceTile.isCompact?46:10
+                                    anchors.rightMargin:instanceTile.isCompact?24:10
+                                    y:instanceTile.isCompact?28:76
+                                    height:14
+                                    text:instanceTile.modelData.installing?("Installing"+(launcher.progress>=0&&launcher.taskInstanceId===instanceTile.modelData.id?" · "+Math.round(launcher.progress*100)+"%":"…")):instanceTile.modelData._pending?instanceTile.modelData.status:instanceTile.modelData.running?"Running":instanceTile.modelData.loader+" · "+instanceTile.modelData.version
+                                    color:instanceTile.modelData.running?Theme.success:Theme.textMuted;font.pixelSize:10
+                                    horizontalAlignment:instanceTile.isCompact?Text.AlignLeft:Text.AlignHCenter
+                                    verticalAlignment:Text.AlignVCenter;elide:Text.ElideRight
+                                }
                             }
                         }
                         ScrollBar.vertical:ScrollBar{}
@@ -259,7 +292,7 @@ ApplicationWindow {
             Text{id:confirmText;Layout.fillWidth:true;wrapMode:Text.Wrap;color:Theme.textSecondary;font.pixelSize:13}
             RowLayout{Layout.alignment:Qt.AlignRight;spacing:8
                 MButton{text:"Cancel";onClicked:confirmDialog.close()}
-                MButton{text:confirmAction==="importPack"&&launcher.busy?"Wait for current task":"Confirm";enabled:confirmAction!=="importPack"||!launcher.busy;kind:confirmAction==="importPack"?"primary":"danger";onClicked:{confirmDialog.close();if(confirmAction==="importPack")launcher.importPack(confirmValue);else if(confirmAction==="play")launcher.play();else if(confirmAction==="delete")launcher.deleteInstance();else if(confirmAction==="restore")launcher.restoreBackup(confirmValue);else if(confirmAction==="account")launcher.removeAccount(confirmValue);else if(confirmAction==="stop")launcher.stopGame();else if(confirmAction==="quit"){forceQuit=true;Qt.quit()}}}
+                MButton{text:confirmAction==="importPack"&&launcher.busy?"Wait for current task":"Confirm";enabled:confirmAction!=="importPack"||!launcher.busy;kind:confirmAction==="importPack"?"primary":"danger";onClicked:{confirmDialog.close();if(confirmAction==="importPack")launcher.importPack(confirmValue);else if(confirmAction==="play")launcher.play();else if(confirmAction==="delete"){window.navigate("library");launcher.deleteInstance();}else if(confirmAction==="restore")launcher.restoreBackup(confirmValue);else if(confirmAction==="account")launcher.removeAccount(confirmValue);else if(confirmAction==="stop")launcher.stopGame();else if(confirmAction==="quit"){forceQuit=true;Qt.quit()}}}
             }
         }
     }

@@ -53,6 +53,28 @@ QString offlineUuid(const QString &name) {
     bytes[6]=char((uchar(bytes[6])&0x0f)|0x30); bytes[8]=char((uchar(bytes[8])&0x3f)|0x80);
     return QUuid::fromRfc4122(bytes).toString(QUuid::WithoutBraces).remove('-');
 }
+// Instance folders keep the instance's name (sanitized for Windows) instead of
+// a random UUID, so "Main" becomes the folder "Main".
+QString instanceFolderId(const QString &instancesRoot, const QString &name) {
+    static QRegularExpression invalid("[<>:\"/\\\\|?*\\x00-\\x1f]");
+    static QRegularExpression reserved("^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$",
+                                      QRegularExpression::CaseInsensitiveOption);
+    auto slug = name.trimmed().left(80);
+    slug.replace('/', ' ').replace('\\', ' ');
+    slug.remove(invalid);
+    while (slug.startsWith('.'))
+        slug.remove(0, 1);
+    while (slug.endsWith('.') || slug.endsWith(' '))
+        slug.chop(1);
+    if (slug.isEmpty())
+        return QUuid::createUuid().toString(QUuid::WithoutBraces);
+    if (reserved.match(slug).hasMatch())
+        slug += "-instance";
+    QString candidate = slug;
+    for (int n = 2; QFileInfo(QDir(instancesRoot).filePath(candidate)).exists(); ++n)
+        candidate = slug + " (" + QString::number(n) + ')';
+    return candidate;
+}
 QString redact(QString text, const QStringList &secrets) {
     for(const auto &s:secrets) if(s.size()>3) text.replace(s,"[hidden]");
     text.replace(QRegularExpression("(?i)(Bearer\\s+)[^\\s\\\"]+"),"\\1[hidden]");

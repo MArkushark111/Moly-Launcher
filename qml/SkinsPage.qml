@@ -155,7 +155,7 @@ Item {
                                 spacing: 5
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Text { text: modelData.model === "slim" ? "SLIM" : "CLASSIC"; color: Theme.textMuted; font.pixelSize: 9; font.letterSpacing: 0.6; Layout.fillWidth: true }
+                                    Text { text: modelData.source === "account" ? "MC ACCOUNT" : modelData.model === "slim" ? "SLIM" : "CLASSIC"; color: Theme.textMuted; font.pixelSize: 9; font.letterSpacing: 0.6; Layout.fillWidth: true }
                                     Icon { visible: skinStore.selectedSkinId === modelData.id; name: "check"; size: 14; color: Theme.accent }
                                 }
                                 SkinModel { Layout.fillWidth: true; Layout.fillHeight: true; source: modelData.url; slim: modelData.model === "slim"; yaw: -18 }

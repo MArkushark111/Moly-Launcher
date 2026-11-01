@@ -29,7 +29,8 @@ class Content {
     QJsonObject curseFile(qint64 project, const QJsonObject &instance, qint64 file = 0);
     void resolve(const QString &provider, const QString &project, const QString &type,
                  const QJsonObject &instance, QJsonArray &files, QSet<QString> &seen,
-                 const QString &version = {}, const QJsonObject &metadata = {});
+                 const QString &version = {}, const QJsonObject &metadata = {},
+                 bool allowVersionFallback = false);
 };
 QString contentFolder(const QString &type);
 QString contentPath(const QString &root, const QString &relative);

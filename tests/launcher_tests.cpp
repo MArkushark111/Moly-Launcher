@@ -447,6 +447,28 @@ class LauncherTests : public QObject {
         QVERIFY(QThreadPool::globalInstance()->waitForDone(5000));
     }
 
+    void installsQueueWithoutInterruptingTheCurrentTask() {
+        QTemporaryDir storage;
+        makeInstance(storage.path());
+        Launcher launcher(storage.path());
+        launcher.duplicateInstance();
+        QVERIFY(launcher.busy());
+        const QVariantMap first{{"provider", "Modrinth"}, {"projectId", "first"},
+                                {"title", "First mod"}, {"type", "mod"}};
+        const QVariantMap second{{"provider", "Modrinth"}, {"projectId", "second"},
+                                 {"title", "Second mod"}, {"type", "mod"}};
+        launcher.beginInstall(first, "test-instance", {}, true);
+        launcher.beginInstall(second, "test-instance", {}, true);
+        launcher.beginInstall(first, "test-instance", {}, true);
+        QCOMPARE(launcher.queuedInstalls().size(), 2);
+        QVERIFY(launcher.busy());
+        const auto queuedId=launcher.queuedInstalls().first().toMap()["id"].toString();
+        launcher.removeQueuedInstall(queuedId);
+        QCOMPARE(launcher.queuedInstalls().size(), 1);
+        QCOMPARE(launcher.queuedInstalls().first().toMap()["title"].toString(), QString("Second mod"));
+        QVERIFY(QThreadPool::globalInstance()->waitForDone(5000));
+    }
+
     void managedModMetadataSurvivesInstallAndExternalDisable() {
         QTemporaryDir storage;
         makeInstance(storage.path());

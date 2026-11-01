@@ -365,7 +365,7 @@ QJsonObject PackExport::importMoly(const QString &root, const QString &archive, 
     QTemporaryDir staged(instances + "/.import-XXXXXX");
     if (!staged.isValid())
         throw Error("Cannot stage the imported instance.");
-    instance["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    instance["id"] = instanceFolderId(instances, instance["name"].toString());
     instance["group"] = "Imported";
     instance["iconRevision"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
     instance["backgroundRevision"] = QUuid::createUuid().toString(QUuid::WithoutBraces);

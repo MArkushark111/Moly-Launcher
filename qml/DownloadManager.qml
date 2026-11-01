@@ -56,6 +56,21 @@ Popup {
                 }
             }
         }
+        ColumnLayout {
+            visible:launcher.queuedInstalls.length>0
+            Layout.fillWidth:true
+            spacing:6
+            Text{text:"Next in line · "+launcher.queuedInstalls.length;color:Theme.textSecondary;font.pixelSize:12}
+            Repeater {
+                model:launcher.queuedInstalls
+                delegate:RowLayout {
+                    required property var modelData
+                    Layout.fillWidth:true
+                    Text{text:modelData.title||"Content";color:Theme.text;font.pixelSize:12;elide:Text.ElideRight;Layout.fillWidth:true}
+                    MButton{iconName:"close";kind:"ghost";compact:true;Accessible.name:"Remove "+(modelData.title||"content")+" from queue";onClicked:launcher.removeQueuedInstall(modelData.id)}
+                }
+            }
+        }
         RowLayout {
             visible:launcher.settings.showCompletedTasks!==false
             Layout.fillWidth:true
@@ -78,7 +93,7 @@ Popup {
                 }
             }
         }
-        Text {visible:panel.visibleCompleted.length===0&&!panel.activeTask;text:"Installations, exports, and backups appear here.";color:Theme.textMuted;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
+        Text {visible:panel.visibleCompleted.length===0&&!panel.activeTask&&launcher.queuedInstalls.length===0;text:"Installations, exports, and backups appear here.";color:Theme.textMuted;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true}
         MButton {visible:!launcher.busy&&launcher.canRetry;text:"Retry last task";iconName:"refresh";kind:"primary";Layout.alignment:Qt.AlignRight;onClicked:launcher.retry()}
     }
 }

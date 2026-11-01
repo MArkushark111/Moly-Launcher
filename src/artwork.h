@@ -5,6 +5,7 @@
 #include <QUrl>
 #include <QPointer>
 #include <QNetworkReply>
+#include <QMutex>
 
 class ArtworkView : public QQuickPaintedItem {
     Q_OBJECT
@@ -17,13 +18,14 @@ public:
     explicit ArtworkView(QQuickItem *parent=nullptr);
     ~ArtworkView() override;
     QUrl source()const{return source_;} qreal radius()const{return radius_;} qreal shade()const{return shade_;} bool animated()const{return animated_;}
-    bool ready()const{return !still_.isNull()||(!movie_.fileName().isEmpty()&&movie_.isValid());}
+    bool ready()const{QMutexLocker lock(&imageMutex_);return !still_.isNull()||!movieFrame_.isNull();}
     void setSource(const QUrl &source);void setRadius(qreal value);void setShade(qreal value);void setAnimated(bool value);
     void paint(QPainter *painter) override;
 signals:
     void appearanceChanged();
 private:
-    QUrl source_;QMovie movie_;QImage still_;qreal radius_=17,shade_=0.5;bool animated_=true;
+    QUrl source_;QMovie movie_;QImage still_,movieFrame_;qreal radius_=17,shade_=0.5;bool animated_=true;
+    mutable QMutex imageMutex_;
     QPointer<QNetworkReply> pendingReply_;
     void reload();
 };

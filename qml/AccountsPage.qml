@@ -114,7 +114,19 @@ ScrollView {
                     spacing: 14
                     Rectangle {
                         width: 42; height: 42; radius: 14; color: Theme.surface2
-                        Text { anchors.centerIn: parent; text: modelData.name.charAt(0).toUpperCase(); font.pixelSize: 20; font.weight: Font.DemiBold; color: Theme.text }
+                        clip: true
+                        SkinHead {
+                            readonly property string skinUrl: skinStore.accountSkins[modelData.id] || ""
+                            anchors.fill: parent
+                            anchors.margins: -2
+                            visible: skinUrl !== ""
+                            source: skinUrl === "" ? "" : Qt.resolvedUrl(skinUrl)
+                        }
+                        Text {
+                            visible: skinStore.accountSkins[modelData.id] === undefined
+                            anchors.centerIn: parent
+                            text: modelData.name.charAt(0).toUpperCase(); font.pixelSize: 20; font.weight: Font.DemiBold; color: Theme.text
+                        }
                     }
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -122,9 +134,13 @@ ScrollView {
                         Text { text: modelData.name; color: Theme.text; font.pixelSize: 15; font.weight: Font.DemiBold }
                         Text { text: modelData.type === "microsoft" ? "Microsoft · Java Edition" : "Offline · local profile"; color: Theme.textSecondary; font.pixelSize: 12 }
                     }
-                    Badge { visible: launcher.activeAccount.id === modelData.id; text: "Active"; tint: Theme.textSecondary }
-                    MButton { visible: launcher.activeAccount.id !== modelData.id; text: "Use profile"; onClicked: launcher.selectAccount(modelData.id) }
-                    MButton { text: "Remove"; kind: "danger"; enabled: !launcher.busy; onClicked: shell.confirm("account", "Remove account?", "This removes the saved profile and its login token from this computer. Your Minecraft worlds remain.", modelData.id) }
+                    RowLayout {
+                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                        spacing: 8
+                        Badge { visible: launcher.activeAccount.id === modelData.id; text: "Active"; tint: Theme.textSecondary }
+                        MButton { visible: launcher.activeAccount.id !== modelData.id; text: "Use profile"; onClicked: launcher.selectAccount(modelData.id) }
+                        MButton { text: "Remove"; kind: "danger"; enabled: !launcher.busy; onClicked: shell.confirm("account", "Remove account?", "This removes the saved profile and its login token from this computer. Your Minecraft worlds remain.", modelData.id) }
+                    }
                 }
             }
         }

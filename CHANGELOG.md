@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.4 - Account skins and friendlier folders
+
+- The wardrobe now loads the skin of the signed-in Minecraft account automatically: the active Microsoft account's skin is fetched in the background at startup, after sign-in or account switch, and appears as an "MC ACCOUNT" card in the skin grid (ready to reselect or re-apply).
+- Saved Microsoft accounts store their profile skin URL and model, and the Accounts page shows each account's real Minecraft head instead of a letter avatar.
+- Fix imported instances failing to download mods: version listings retry without the loader filter when no tagged release matches, pinned dependency versions fall back to their latest compatible release, versions without loader tags are tolerated, Quilt instances accept Fabric mods, and "no compatible release" errors now name the project's version and instance loader instead of a generic message.
+- New, duplicated, imported, modpack and pending instances use their friendly name as folder name ("Main" → "Main"); names are sanitized for Windows and made unique, falling back to a UUID when nothing safe remains.
+
 ## 0.8.3 - Clear sign-in feedback
 
 - Show a temporary Copied label/check after copying the browser code in either account view or desktop overlay.

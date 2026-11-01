@@ -13,8 +13,9 @@
 
 using namespace moly;
 namespace {
+// Skin library entries are keyed by UUID (Mojang profile ids are undashed) or "default-*".
 bool validId(const QString &id) {
-    return id == "moly-default" || QStringList{"default-steve","default-alex","default-ari","default-efe","default-kai","default-makena","default-noor","default-sunny","default-zuri"}.contains(id) || QRegularExpression("^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$").match(id).hasMatch();
+    return id == "moly-default" || QStringList{"default-steve","default-alex","default-ari","default-efe","default-kai","default-makena","default-noor","default-sunny","default-zuri"}.contains(id) || QRegularExpression("^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$").match(id).hasMatch() || QRegularExpression("^[0-9a-f]{32}$").match(id).hasMatch();
 }
 bool validModel(const QString &model) { return model == "classic" || model == "slim"; }
 }
@@ -168,6 +169,35 @@ void SkinStore::setSelectedModel(const QString &model) {
 void SkinStore::requestApply() {
     try { readSkin(imagePath(selection)); fail({}); emit applyRequested(imagePath(selection), selectedModel()); }
     catch (const std::exception &e) { fail(QString::fromUtf8(e.what())); }
+}
+// Called with the signed-in Minecraft account's skin (id is the account's
+// profile UUID). Adds or refreshes its wardrobe entry without disturbing the
+// current selection. Silent on failure: background fetches must not nag.
+void SkinStore::setAccountSkin(const QString &id, const QString &name, const QString &model, const QString &pngPath) {
+    if (!validId(id) || !validModel(model)) return;
+    try {
+        const auto image = readSkin(pngPath);
+        QByteArray png; QBuffer buffer(&png); buffer.open(QIODevice::WriteOnly);
+        if (!image.save(&buffer, "PNG")) return;
+        writeBytes(imagePath(id), png);
+        for (qsizetype i = 0; i < entries.size(); ++i) {
+            const auto entry = entries[i].toObject();
+            if (entry["id"] == id && entry["source"].toString() == "account") { entries.removeAt(i); break; }
+        }
+        entries.append(QJsonObject{{"id", id}, {"name", name.isEmpty() ? "Account skin" : name},
+                                   {"model", model}, {"source", "account"}});
+        save(); fail({}); emit changed();
+    } catch (const std::exception &) {}
+}
+QVariantMap SkinStore::accountSkins() const {
+    QVariantMap result;
+    for (const auto &value : entries) {
+        const auto entry = value.toObject();
+        if (entry["source"].toString() != "account") continue;
+        try { result[entry["id"].toString()] = QUrl::fromLocalFile(imagePath(entry["id"].toString())).toString(); }
+        catch (const std::exception &) {}
+    }
+    return result;
 }
 QImage SkinStore::defaultTexture() {
     initializeDefaultSkins();

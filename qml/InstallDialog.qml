@@ -72,7 +72,7 @@ LiquidDialog {
         ColumnLayout{visible:dialog.projectMode&&dialog.project.type!=="modpack";Layout.fillWidth:true;spacing:6
             Label{text:"Install to";color:Theme.textSecondary;font.pixelSize:12}
             RowLayout{Layout.fillWidth:true;spacing:8
-                MComboBox {id:targetChoice;Layout.fillWidth:true;model:launcher.instances;textRole:"name";valueRole:"id";enabled:!launcher.busy;onActivated:dialog.loadChoices()}
+                MComboBox {id:targetChoice;Layout.fillWidth:true;model:launcher.instances;textRole:"name";valueRole:"id";onActivated:dialog.loadChoices()}
                 MButton{visible:targetChoice.count===0;text:"New instance";onClicked:{dialog.close();shell.create()}}
             }
         }
@@ -152,7 +152,7 @@ LiquidDialog {
         RowLayout{Layout.alignment:Qt.AlignRight;spacing:8
             MButton{text:!dialog.projectMode&&launcher.busy?"Cancel task":"Cancel";onClicked:{if(!dialog.projectMode&&launcher.busy)launcher.cancel();else{launcher.dismissPlan();dialog.close()}}}
             MButton{text:"Retry versions";visible:dialog.projectMode&&!!launcher.installError;onClicked:dialog.loadChoices()}
-            MButton{objectName:"confirmInstallButton";text:dialog.removalOnly?"Remove":(dialog.review.remove||[]).length>0?"Apply changes":"Confirm & install";kind:dialog.removalOnly?"danger":"primary";enabled:dialog.projectMode ? !launcher.busy&&!launcher.loadingInstallChoices&&launcher.installVersions.length>0 : !launcher.busy&&!dialog.hasUnresolved&&((dialog.review.files||[]).length>0||(dialog.review.remove||[]).length>0);onClicked:{if(dialog.projectMode)dialog.confirmInstall();else{dialog.applying=true;dialog.localError="";launcher.applyPlan()}}}
+            MButton{objectName:"confirmInstallButton";text:dialog.removalOnly?"Remove":(dialog.review.remove||[]).length>0?"Apply changes":dialog.projectMode&&launcher.busy?"Add to queue":"Confirm & install";kind:dialog.removalOnly?"danger":"primary";enabled:dialog.projectMode ? !launcher.loadingInstallChoices&&launcher.installVersions.length>0 : !launcher.busy&&!dialog.hasUnresolved&&((dialog.review.files||[]).length>0||(dialog.review.remove||[]).length>0);onClicked:{if(dialog.projectMode)dialog.confirmInstall();else{dialog.applying=true;dialog.localError="";launcher.applyPlan()}}}
         }
     }
     }

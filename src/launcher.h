@@ -57,6 +57,7 @@ class Launcher : public QObject {
     Q_PROPERTY(QString importScanError READ importScanError NOTIFY importScanChanged)
     Q_PROPERTY(QStringList importSources READ importSources CONSTANT)
     Q_PROPERTY(QVariantList installedContent READ installedContent NOTIFY changed)
+    Q_PROPERTY(QVariantList queuedInstalls READ queuedInstalls NOTIFY installQueueChanged)
     Q_PROPERTY(bool microsoftAvailable READ microsoftAvailable NOTIFY changed)
   public:
     explicit Launcher(QString root, QObject *parent = nullptr);
@@ -158,6 +159,7 @@ class Launcher : public QObject {
     QString importScanError() const { return localScanError; }
     QStringList importSources() const;
     QVariantList installedContent() const;
+    QVariantList queuedInstalls() const { return installQueue.toVariantList(); }
     bool microsoftAvailable() const;
     Q_INVOKABLE void identifyContent();
     Q_INVOKABLE QVariantMap presenceActivity(const QString &page, bool shareServer = true) const;
@@ -183,6 +185,7 @@ class Launcher : public QObject {
     Q_INVOKABLE void play(bool offline = false);
     Q_INVOKABLE void playTarget(const QString &instanceId, const QString &type, const QString &value);
     Q_INVOKABLE void applySkin(const QString &path, const QString &variant);
+    void refreshAccountSkin();
     Q_INVOKABLE void stopGame();
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void retry();
@@ -205,6 +208,7 @@ class Launcher : public QObject {
     Q_INVOKABLE void loadMoreResults();
     Q_INVOKABLE void beginInstall(const QVariantMap &project, const QString &instanceId = QString(),
                                   const QString &versionId = QString(), bool automatic = false);
+    Q_INVOKABLE void removeQueuedInstall(const QString &id);
     Q_INVOKABLE void planInstall(const QVariantMap &project);
     Q_INVOKABLE void checkUpdates();
     Q_INVOKABLE void dismissPlan();
@@ -242,8 +246,10 @@ class Launcher : public QObject {
     void gameStarted();
     void gameEnded();
     void installStateChanged();
+    void installQueueChanged();
     void installFailed(QString message);
     void installCompleted(QString message);
+    void accountSkinFound(QString id, QString name, QString model, QString pngPath);
     void importScanChanged();
 
   private:
@@ -256,6 +262,8 @@ class Launcher : public QObject {
     QString retryInstanceId, retryOperation;
     QJsonObject config, review;
     QJsonObject pendingInstance;
+    QJsonArray installQueue;
+    bool pendingGameInstall = false;
     QFutureWatcher<QJsonObject> localScanWatcher;
     std::atomic_bool localScanCancelled = false;
     QJsonArray localCandidates;
@@ -288,6 +296,8 @@ class Launcher : public QObject {
     std::atomic_bool identityCancelled = false;
     QFutureWatcher<QJsonObject> choicesWatcher;
     std::atomic_bool choicesCancelled = false;
+    QFutureWatcher<QJsonObject> skinWatcher;
+    std::atomic_bool skinCancelled = false;
     quint64 choicesGeneration = 0;
     bool choicesLoading = false, choicesPending = false, automaticInstall = false;
     QJsonObject choicesProject, choicesInstance;
@@ -322,4 +332,6 @@ class Launcher : public QObject {
     void enrichReview(QJsonObject plan, const QString &targetId = QString());
     void setInstallError(const QString &message);
     void startSearch(bool append);
+    void startNextQueuedInstall();
+    void scheduleGameInstall(const QString &id);
 };
