@@ -213,12 +213,21 @@ Item {
                     Item{implicitHeight:12}
                 }
             }
+                Flow {
+                    Layout.fillWidth:true;spacing:12
+                    MCheckBox{id:exportMods;text:"Mods";checked:true}
+                    MCheckBox{id:exportConfigs;text:"Configs";checked:true}
+                    MCheckBox{id:exportResources;text:"Resource packs";checked:true}
+                    MCheckBox{id:exportShaders;text:"Shader packs";checked:true}
+                    MCheckBox{id:exportSettings;text:"Game settings & other files";checked:true}
+                    MCheckBox{id:exportArt;text:"Artwork";checked:true;enabled:page.exportKind!=="mrpack"}
+                }
                 RowLayout {
                     Layout.fillWidth:true;spacing:8
                     MCheckBox {id:exportWorlds;enabled:page.exportKind!=="mrpack";text:"Include worlds"}
                     MButton{text:"Content list";kind:"ghost";compact:true;onClicked:shell.chooseFile("share")}
                     Item{Layout.fillWidth:true}
-                    MButton{text:"Export ."+page.exportKind;iconName:"share";kind:"primary";enabled:!launcher.busy&&!instance.running;onClicked:shell.exportSetup(page.exportKind,page.exportKind!=="mrpack"&&exportWorlds.checked)}
+                    MButton{text:"Export ."+page.exportKind;iconName:"share";kind:"primary";enabled:!launcher.busy&&!instance.running;onClicked:shell.exportSetup(page.exportKind,page.exportKind!=="mrpack"&&exportWorlds.checked,{mods:exportMods.checked,configs:exportConfigs.checked,resourcepacks:exportResources.checked,shaders:exportShaders.checked,settings:exportSettings.checked,artwork:exportArt.checked,worlds:exportWorlds.checked})}
                 }
             }
             InstanceSettings { instance: page.instance; shell: page.shell; revision: page.revision }

@@ -127,7 +127,7 @@ struct Payload { QString path, from; qint64 size; };
 // non-owning seekable adapter rather than passing QSaveFile directly.
 class ZipDevice final : public QIODevice {
   public:
-    explicit ZipDevice(QSaveFile &destination) : file(destination) { open(QIODevice::WriteOnly); }
+    explicit ZipDevice(QSaveFile &destination) : file(destination) { open(QIODevice::WriteOnly | QIODevice::Unbuffered); }
     bool isSequential() const override { return false; }
     qint64 size() const override { return file.size(); }
     bool seek(qint64 offset) override { return file.seek(offset) && QIODevice::seek(offset); }
@@ -204,7 +204,7 @@ QMap<QString, QJsonObject> managedFiles(const QJsonObject &content) {
 } // namespace
 
 void PackExport::write(const QString &root, const QJsonObject &instance, const QString &destination,
-                       const QString &requestedFormat, bool includeWorlds, Context context) {
+                       const QString &requestedFormat, bool includeWorlds, Context context, QJsonObject options) {
     context.check();
     const auto format = requestedFormat.toLower().remove('.');
     if (!QStringList{"mlypack", "zip", "mrpack"}.contains(format))
@@ -219,9 +219,21 @@ void PackExport::write(const QString &root, const QJsonObject &instance, const Q
         target.compare(rootPath + "/accounts.json",Qt::CaseInsensitive)==0)
         throw Error("Save the export outside the instance folders and launcher settings.");
     auto descriptor = portableInstance(instance);
-    const auto content = safeContent(readObject(source + "/content.json", true));
+    auto content = safeContent(readObject(source + "/content.json", true));
     auto managed = managedFiles(content);
     auto payload = collectFiles(source, descriptor, format == "mrpack" ? false : includeWorlds);
+    auto selected=[&](const QString &path) {
+        if(!path.startsWith("game/"))return options["artwork"].toBool(true);
+        const auto relative=path.mid(5), first=relative.section('/',0,0).toLower();
+        const auto key=first=="mods"?"mods":first=="config"||first=="defaultconfigs"?"configs":first=="resourcepacks"?"resourcepacks":first=="shaderpacks"?"shaders":first=="saves"?"worlds":"settings";
+        return options[QLatin1String(key)].toBool(true);
+    };
+    payload.removeIf([&](const Payload &file){return !selected(file.path);});
+    QJsonArray selectedContent;
+    for(const auto &value:content["files"].toArray())if(selected("game/"+value.toObject()["path"].toString()))selectedContent.append(value);
+    content["files"]=selectedContent;
+    if(!options["artwork"].toBool(true)){descriptor.remove("iconFile");descriptor.remove("backgroundFile");}
+    if(!options["settings"].toBool(true))descriptor["settings"]=QJsonObject{};
     QMap<QString, QJsonObject> presentManaged;
     for (const auto &file : payload) {
         if (!file.path.startsWith("game/")) continue;
@@ -300,6 +312,8 @@ void PackExport::write(const QString &root, const QJsonObject &instance, const Q
         qsizetype index = 0;
         for (auto it = archiveFiles.begin(); it != archiveFiles.end(); ++it) {
             context.report("Writing " + it.key(), index++, archiveFiles.size());
+            const auto suffix=QFileInfo(it.key()).suffix().toLower();
+            zip.setCompressionPolicy(QStringList{"jar","zip","png","gif","jpg","webp","ogg"}.contains(suffix)?QZipWriter::NeverCompress:QZipWriter::AutoCompress);
             addFile(zip, it.key(), it.value());
             if(fileHash(it.value(),"sha512")!=archiveHashes[it.key()])
                 throw Error("A file changed while exporting: "+it.key()+". Close Minecraft and retry.");
@@ -326,7 +340,7 @@ QJsonObject PackExport::importMoly(const QString &root, const QString &archive, 
     if (!unpacked.isValid())
         throw Error("Cannot create an import staging folder.");
     context.report("Reading portable pack");
-    extractZip(archive, unpacked.path());
+    extractZip(archive, unpacked.path(), {}, false, context);
     context.check();
     const auto manifest = readObject(unpacked.path() + "/moly-pack.json");
     if (manifest["format"] != "moly-instance-pack" || manifest["schemaVersion"].toInt() != 1)

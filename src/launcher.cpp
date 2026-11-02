@@ -10,6 +10,8 @@
 #include "playtargets.h"
 #include "skinstore.h"
 #include <QBuffer>
+#include <QElapsedTimer>
+#include <memory>
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -297,7 +299,11 @@ void Launcher::task(const QString &title, std::function<QJsonObject(Context)> wo
     emit statusChanged();
     emit jobsChanged();
     if(recordJob)emit changed();
-    Context context{&cancelled, [this, generation, recordJob](QString text, qint64 doneCount, qint64 total) {
+    auto progressClock=std::make_shared<QElapsedTimer>();progressClock->start();
+    auto transferClock=std::make_shared<QElapsedTimer>();transferClock->start();
+    Context context{&cancelled, [this, generation, recordJob,progressClock](QString text, qint64 doneCount, qint64 total) {
+                        if(progressClock->elapsed()<80 && !(total>0&&doneCount>=total))return;
+                        progressClock->restart();
                         QMetaObject::invokeMethod(
                             this,
                             [this, generation, recordJob, text, doneCount, total] {
@@ -324,7 +330,9 @@ void Launcher::task(const QString &title, std::function<QJsonObject(Context)> wo
                             },
                             Qt::QueuedConnection);
                     }};
-    context.transfer = [this,generation,recordJob](qint64 bytes,qint64 total,double speed){
+    context.transfer = [this,generation,recordJob,transferClock](qint64 bytes,qint64 total,double speed){
+        if(transferClock->elapsed()<100 && !(total>0&&bytes>=total))return;
+        transferClock->restart();
         QMetaObject::invokeMethod(this,[this,generation,recordJob,bytes,total,speed]{
             if(generation!=taskGeneration||!working)return;
             transferBytes=bytes;transferTotal=total;transferSpeed=speed;
@@ -955,12 +963,12 @@ void Launcher::dismissJob(const QString &id) {
     for(qsizetype i=jobList.size()-1;i>=0;--i)if(jobList[i].toMap()["id"].toString()==id&&jobList[i].toMap()["state"]!="Working")jobList.removeAt(i);
     emit jobsChanged();
 }
-void Launcher::exportInstance(const QString &url,const QString &format,bool includeWorlds) {
+void Launcher::exportInstance(const QString &url,const QString &format,bool includeWorlds,const QVariantMap &options) {
     if(!editable())return;
     const auto destination=localPath(url),base=root;
     const auto instance=current();
     task("Exporting "+instance["name"].toString(),[=](Context context){
-        PackExport::write(base,instance,destination,format,includeWorlds,context);return QJsonObject{};
+        PackExport::write(base,instance,destination,format,includeWorlds,context,QJsonObject::fromVariantMap(options));return QJsonObject{};
     },[this](QJsonObject){emit notice("Your instance export is ready.",false);},instance["id"].toString(),"export");
 }
 void Launcher::applySkin(const QString &path,const QString &variant) {
@@ -1352,7 +1360,7 @@ void Launcher::startInstallChoices() {
         if (!result.contains("error")) choicesCache[cacheKey] = installVersionList;
         installErrorText = result["error"].toString();
         if (installVersionList.isEmpty() && installErrorText.isEmpty())
-            installErrorText = "No compatible release was found for this setup.";
+            installErrorText = "No compatible version was found for this setup.";
         emit installStateChanged();
     });
     choicesWatcher.setFuture(QtConcurrent::run([this,base,key,project,instance] {
@@ -1402,7 +1410,9 @@ void Launcher::beginInstall(const QVariantMap &project, const QString &requested
         emit notice("Queued " + (title.isEmpty() ? QString("content") : title) + " for installation.", false);
         return;
     }
+    activeInstallProject=QJsonObject::fromVariantMap(project);
     automaticInstall = automatic;
+    emit installStateChanged();
     pendingInstance = {};
     if(automatic && project.value("type")=="modpack") {
         pendingInstance={{"id",instanceFolderId(root+"/instances",project.value("title").toString())},{"name",project.value("title").toString()},
@@ -1496,7 +1506,7 @@ void Launcher::planInstall(const QVariantMap &project) {
             auto project = data;
             if (project["versionId"].toString().isEmpty()) {
                 for(auto value:available)if(value.toObject()["channel"].toString("release")=="release"){project["versionId"]=value.toObject()["id"];break;}
-                if(project["versionId"].toString().isEmpty())throw Error("Only beta or alpha builds are available. Open Versions and choose one explicitly.");
+                if(project["versionId"].toString().isEmpty())project["versionId"]=available.first().toObject()["id"];
             }
             bool compatible = false;
             for (auto value : available)
@@ -1917,7 +1927,14 @@ bool Launcher::microsoftAvailable() const {
 QVariantList Launcher::installedContent() const {
     QVariantList result;
     if(current().isEmpty())return result;
-    for(const auto &type:QStringList{"mod","resourcepack","shader"})result.append(contentFiles(type));
+    try {
+        const auto dir=instanceDir(current());
+        for(const auto &value:readObject(dir+"/content.json",true)["files"].toArray()) {
+            const auto file=value.toObject();
+            const auto path=contentPath(dir+"/game",file["path"].toString());
+            if(QFileInfo::exists(path)||QFileInfo::exists(path+".disabled"))result.append(file.toVariantMap());
+        }
+    } catch(const std::exception &) {}
     return result;
 }
 QVariantMap Launcher::presenceActivity(const QString &page,bool shareServer) const {

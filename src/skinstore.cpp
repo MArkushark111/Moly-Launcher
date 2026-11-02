@@ -18,6 +18,19 @@ bool validId(const QString &id) {
     return id == "moly-default" || QStringList{"default-steve","default-alex","default-ari","default-efe","default-kai","default-makena","default-noor","default-sunny","default-zuri"}.contains(id) || QRegularExpression("^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$").match(id).hasMatch() || QRegularExpression("^[0-9a-f]{32}$").match(id).hasMatch();
 }
 bool validModel(const QString &model) { return model == "classic" || model == "slim"; }
+// Slim textures reserve two transparent columns after each base arm's back face.
+// Check both arms and their opaque front faces to avoid guessing from blank skins.
+bool hasSlimArms(const QImage &image) {
+    if(image.size()!=QSize(64,64))return false;
+    for(int y=0;y<12;++y) {
+        for(int x=0;x<2;++x)
+            if(qAlpha(image.pixel(54+x,20+y))||qAlpha(image.pixel(46+x,52+y)))return false;
+        for(int x=0;x<3;++x)
+            if(qAlpha(image.pixel(44+x,20+y))!=255||qAlpha(image.pixel(36+x,52+y))!=255)return false;
+    }
+    return true;
+}
+
 }
 
 static void initializeDefaultSkins() {
@@ -48,14 +61,22 @@ SkinStore::SkinStore(const QString &dataRoot, QObject *parent) : QObject(parent)
         if (!library.isEmpty() && library["schemaVersion"].toInt() != 1) throw Error("This skin library was saved by an unsupported version of Moly.");
         const auto models=library["defaultModels"].toObject();
         for(auto it=models.begin();it!=models.end();++it)if(builtIn(it.key())&&validModel(it.value().toString()))builtinModels[it.key()]=it.value();
+        bool migrated=false;
         for (const auto &value : library["skins"].toArray()) {
-            const auto entry=value.toObject();const auto id=entry["id"].toString();
+            auto entry=value.toObject();const auto id=entry["id"].toString();
             if(!validId(id)||id=="moly-default"||builtIn(id)||!validModel(entry["model"].toString()))continue;
-            if(QFileInfo::exists(imagePath(id))&&!QFileInfo(imagePath(id)).isSymLink())entries.append(entry);
+            if(QFileInfo::exists(imagePath(id))&&!QFileInfo(imagePath(id)).isSymLink()) {
+                if(entry["source"]=="account"&&!entry["armModelChecked"].toBool()) {
+                    try {if(entry["model"]=="classic"&&hasSlimArms(readSkin(imagePath(id))))entry["model"]="slim";}catch(const std::exception &){}
+                    entry["armModelChecked"]=true;migrated=true;
+                }
+                entries.append(entry);
+            }
         }
         const auto candidate=library["selected"].toString();
         if(builtIn(candidate))selection=candidate;
         else for(const auto &value:entries)if(value.toObject()["id"]==candidate)selection=candidate;
+        if(migrated)save();
     }catch(const std::exception &e){fail(QString::fromUtf8(e.what()));}
 }
 QString SkinStore::imagePath(const QString &id) const {
@@ -185,7 +206,7 @@ void SkinStore::setAccountSkin(const QString &id, const QString &name, const QSt
             if (entry["id"] == id && entry["source"].toString() == "account") { entries.removeAt(i); break; }
         }
         entries.append(QJsonObject{{"id", id}, {"name", name.isEmpty() ? "Account skin" : name},
-                                   {"model", model}, {"source", "account"}});
+                                   {"model", model=="classic"&&hasSlimArms(image)?QString("slim"):model}, {"source", "account"}, {"armModelChecked",true}});
         save(); fail({}); emit changed();
     } catch (const std::exception &) {}
 }

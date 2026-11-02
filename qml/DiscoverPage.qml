@@ -8,9 +8,10 @@ Item {
     property string targetInstanceId: launcher.selectedId
     readonly property var knownContent: launcher.installedContent
     function installed(project) { return project.type!=="modpack" && knownContent.some(function(f){return f.provider===project.provider && f.projectId===project.projectId}) }
+    function installing(project) { const active=launcher.installingProject;return launcher.busy&&["resolve-auto","resolve","content"].indexOf(launcher.taskOperation)>=0&&active.provider===project.provider&&active.projectId===project.projectId }
     function queued(project) { return launcher.queuedInstalls.some(function(item){return item.project.provider===project.provider && item.project.projectId===project.projectId && item.target===(project.type==="modpack"?"":targetInstanceId)}) }
     function install(project) {
-        if(installed(project)||queued(project))return
+        if(installed(project)||queued(project)||installing(project))return
         if(instantInstall && project.type!=="modpack")launcher.beginInstall(project,targetInstanceId,"",true)
         else shell.installProject(project)
     }
@@ -551,11 +552,11 @@ Item {
                                     }
                                     MButton {
                                         objectName:"installProject-"+modelData.projectId
-                                        text: page.installed(modelData) ? "Installed" : page.queued(modelData) ? "Queued" : "Install"
+                                        text: page.installing(modelData)?"Installing...":page.installed(modelData) ? "Installed" : page.queued(modelData) ? "Queued" : "Install"
                                         kind: page.installed(modelData) || page.queued(modelData) ? "secondary" : "primary"
                                         implicitHeight: 30
-                                        implicitWidth: 84
-                                        enabled: !page.installed(modelData) && !page.queued(modelData)
+                                        Layout.minimumWidth: 112
+                                        enabled: !page.installing(modelData) && !page.installed(modelData) && !page.queued(modelData)
                                         onClicked: page.install(modelData)
                                     }
                                 }
@@ -841,11 +842,11 @@ Item {
                     onClicked: launcher.openLink(page.detailProject.page || "")
                 }
                 MButton {
-                    text: page.installed(page.detailProject)?"Installed":page.queued(page.detailProject)?"Queued":"Install"
+                    text: page.installing(page.detailProject)?"Installing...":page.installed(page.detailProject)?"Installed":page.queued(page.detailProject)?"Queued":"Install"
                     kind: page.installed(page.detailProject)||page.queued(page.detailProject)?"secondary":"primary"
                     Layout.fillWidth: true
                     implicitHeight: 36
-                    enabled: !page.installed(page.detailProject)&&!page.queued(page.detailProject)
+                    enabled: !page.installing(page.detailProject) && !page.installed(page.detailProject)&&!page.queued(page.detailProject)
                     onClicked: {
                         detailDrawer.close();
                         page.install(page.detailProject);

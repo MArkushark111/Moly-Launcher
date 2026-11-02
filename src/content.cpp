@@ -316,8 +316,6 @@ QJsonObject Content::modrinthVersion(const QString &project, const QJsonObject &
         }
         if (!instance.isEmpty() && !o["game_versions"].toArray().contains(instance["version"]))
             continue;
-        if (version.isEmpty() && o["version_type"] != "release")
-            continue;
         auto candidates = o["files"].toArray();
         if (candidates.isEmpty())
             continue;
@@ -350,7 +348,7 @@ QJsonObject Content::modrinthVersion(const QString &project, const QJsonObject &
         throw Error(QString("Minecraft %1%2 is not supported by version %3.")
                         .arg(instance.isEmpty() ? QString("this setup") : instance["version"].toString(),
                              loader, label.isEmpty() ? version : label));
-    throw Error(QString("No compatible release of this project was found for Minecraft %1%2.")
+    throw Error(QString("No compatible version of this project was found for Minecraft %1%2.")
                     .arg(instance.isEmpty() ? QString("this setup") : instance["version"].toString(), loader));
 }
 QJsonObject Content::curseFile(qint64 project, const QJsonObject &instance, qint64 file) {
@@ -373,8 +371,6 @@ QJsonObject Content::curseFile(qint64 project, const QJsonObject &instance, qint
     QJsonArray all = file ? QJsonArray{response["data"]} : response["data"].toArray();
     for (auto v : all) {
         auto o = v.toObject();
-        if (!file && o["releaseType"].toInt() != 1)
-            continue;
         if (!instance.isEmpty() && !o["gameVersions"].toArray().contains(instance["version"]))
             continue;
         QString hash, alg;

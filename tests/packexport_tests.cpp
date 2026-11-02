@@ -44,6 +44,27 @@ class PackExportTests : public QObject {
         return root + "/instances/" + instance["id"].toString();
     }
   private slots:
+    void selectiveExportRoundtripWithBinaryPayload() {
+        QTemporaryDir storage;
+        const auto instance=fixture(storage.path());
+        QByteArray binary(2*1024*1024,Qt::Uninitialized);
+        quint32 state=12345;
+        for(auto &byte:binary){state=1664525*state+1013904223;byte=char(state>>24);}
+        writeBytes(storage.path()+"/instances/original/game/mods/large.jar",binary);
+        writeBytes(storage.path()+"/instances/original/game/resourcepacks/test.zip",binary.left(4096));
+        for(const auto &format:QStringList{"mlypack","zip","mrpack"}) {
+            const auto archive=storage.path()+"/selected."+format;
+            PackExport::write(storage.path(),instance,archive,format,false,{},{{"configs",false},{"resourcepacks",false},{"artwork",false}});
+            QCOMPARE(zipEntry(archive,format=="mrpack"?"overrides/mods/large.jar":"game/mods/large.jar"),binary);
+            if(format=="mrpack")continue;
+            const auto imported=PackExport::importMoly(storage.path(),archive);
+            const auto dir=importedDirectory(storage.path(),imported);
+            QCOMPARE(fileHash(dir+"/game/mods/large.jar"),fileHash(storage.path()+"/instances/original/game/mods/large.jar"));
+            QVERIFY(!QFileInfo::exists(dir+"/game/config/example.toml"));
+            QVERIFY(!QFileInfo::exists(dir+"/game/resourcepacks/test.zip"));
+            QVERIFY(!imported.contains("iconFile"));
+        }
+    }
     void portableRoundtripExcludesWorldsAndSecrets() {
         QTemporaryDir storage;
         const auto instance = fixture(storage.path());

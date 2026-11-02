@@ -34,6 +34,7 @@ ApplicationWindow {
     property string discoverProvider: "Modrinth"
     property string exportFormat: "mlypack"
     property bool exportWorlds: false
+    property var exportOptions: ({})
     property var worldIconEntry: ({})
     property int resolveIndex: -1
     property string folderAction: "prism"
@@ -73,7 +74,7 @@ ApplicationWindow {
         if(component.status===Component.Ready)component.createObject(window,{owner:window,discoverType:type||"mod",targetInstanceId:launcher.selectedId}).show()
     }
     function browsePacks(query,provider) { discoverQuery=query;discoverProvider=provider;discoverType="modpack";navigate("discover") }
-    function exportSetup(format,worlds) { exportFormat=format;exportWorlds=worlds;chooseFile("export") }
+    function exportSetup(format,worlds,options) { exportFormat=format;exportWorlds=worlds;exportOptions=options||{};chooseFile("export") }
     function launchTarget(entry) { launcher.playTarget(entry.instanceId,entry.type,entry.value) }
     function chooseWorldIcon(entry) {
         if(launcher.isInstanceRunning(entry.instanceId)){toast.show("Close this instance before changing its world icon.",true);return}
@@ -273,7 +274,7 @@ ApplicationWindow {
             else if(fileAction==="log")launcher.saveLog(path)
             else if(fileAction==="icon")launcher.setInstanceIcon(path)
             else if(fileAction==="background")launcher.setInstanceBackground(path)
-            else if(fileAction==="export")launcher.exportInstance(path,exportFormat,exportWorlds)
+            else if(fileAction==="export")launcher.exportInstance(path,exportFormat,exportWorlds,exportOptions)
             else if(fileAction==="skin")skinStore.importSkin(path,pageLoader.item&&pageLoader.item.importModel||"classic")
             else if(fileAction==="worldIcon"){
                 if(launcher.isInstanceRunning(worldIconEntry.instanceId))toast.show("Close this instance before changing its world icon.",true)

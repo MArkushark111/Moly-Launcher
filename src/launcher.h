@@ -57,6 +57,7 @@ class Launcher : public QObject {
     Q_PROPERTY(QString importScanError READ importScanError NOTIFY importScanChanged)
     Q_PROPERTY(QStringList importSources READ importSources CONSTANT)
     Q_PROPERTY(QVariantList installedContent READ installedContent NOTIFY changed)
+    Q_PROPERTY(QVariantMap installingProject READ installingProject NOTIFY installStateChanged)
     Q_PROPERTY(QVariantList queuedInstalls READ queuedInstalls NOTIFY installQueueChanged)
     Q_PROPERTY(bool microsoftAvailable READ microsoftAvailable NOTIFY changed)
   public:
@@ -159,6 +160,7 @@ class Launcher : public QObject {
     QString importScanError() const { return localScanError; }
     QStringList importSources() const;
     QVariantList installedContent() const;
+    QVariantMap installingProject() const { return activeInstallProject.toVariantMap(); }
     QVariantList queuedInstalls() const { return installQueue.toVariantList(); }
     bool microsoftAvailable() const;
     Q_INVOKABLE void identifyContent();
@@ -225,7 +227,7 @@ class Launcher : public QObject {
     Q_INVOKABLE void restoreBackup(const QString &name);
     Q_INVOKABLE void saveLog(const QString &url);
     Q_INVOKABLE void exportContentList(const QString &url);
-    Q_INVOKABLE void exportInstance(const QString &url, const QString &format, bool includeWorlds = false);
+    Q_INVOKABLE void exportInstance(const QString &url, const QString &format, bool includeWorlds = false, const QVariantMap &options = {});
     Q_INVOKABLE bool isInstanceRunning(const QString &id) const { return processes.contains(id); }
     Q_INVOKABLE QVariantList worldList() const;
     Q_INVOKABLE void relocate(const QString &url);
@@ -262,6 +264,7 @@ class Launcher : public QObject {
     QString retryInstanceId, retryOperation;
     QJsonObject config, review;
     QJsonObject pendingInstance;
+    QJsonObject activeInstallProject;
     QJsonArray installQueue;
     bool pendingGameInstall = false;
     QFutureWatcher<QJsonObject> localScanWatcher;
