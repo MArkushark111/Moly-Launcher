@@ -30,8 +30,7 @@ class LauncherTests : public QObject {
     }
 
   private slots:
-    // These synchronous tests intentionally never enter an event loop. The launcher's deferred
-    // catalog refresh is cancelled with object destruction, so the suite does not contact services.
+
     void bundledMicrosoftRegistrationRepairsStaleSettings() {
         QTemporaryDir storage;writeObject(storage.path()+"/settings.json",{{"microsoftClientId","old invalid value"},{"accentColor","#8b5cf6"}});
         Launcher launcher(storage.path());QVERIFY(launcher.microsoftAvailable());

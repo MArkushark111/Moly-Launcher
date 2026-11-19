@@ -28,9 +28,9 @@ Item {
         anchors.fill:parent;spacing:14
         RowLayout {
             Layout.fillWidth:true
-            TabStrip { tabs:[{label:"Identity & art",icon:"file"},{label:"Game",icon:"play"},{label:"Recovery",icon:"refresh"}];currentIndex:page.section;onActivated:function(index){page.section=index} }
+            TabStrip { tabs:page.instance.engine==="moly-rust"?[{label:"Identity & art",icon:"file"},{label:"Game",icon:"play"},{label:"Recovery",icon:"refresh"},{label:"Rust visuals",icon:"settings"}]:[{label:"Identity & art",icon:"file"},{label:"Game",icon:"play"},{label:"Recovery",icon:"refresh"}];currentIndex:page.section;onActivated:function(index){page.section=index} }
             Item { Layout.fillWidth:true }
-            MButton { text:"Save";kind:"primary";enabled:!launcher.busy&&!page.instance.running;onClicked:page.save() }
+            MButton { text:"Save";kind:"primary";enabled:!launcher.busy&&!page.instance.running;onClicked:page.section===3?rustVisualPanel.save():page.save() }
         }
         ScrollView {
             id:scroll;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:availableWidth
@@ -90,6 +90,7 @@ Item {
                         MField { id:jvmArgs;Layout.fillWidth:true;text:page.draft.settings&&page.draft.settings.jvmArgs||"";placeholderText:"Additional JVM arguments — global if blank" }
                     }
                 }
+                RustVisualsPanel { id:rustVisualPanel;visible:page.section===3&&page.instance.engine==="moly-rust";Layout.fillWidth:true;instance:page.instance;shell:page.shell }
                 Panel {
                     visible:page.section===2;Layout.fillWidth:true
                     contentItem:ColumnLayout {

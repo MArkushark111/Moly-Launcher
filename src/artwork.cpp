@@ -60,8 +60,8 @@ void ArtworkView::reload(){
         }
         update();return;
     }
-    if(!source_.isLocalFile()){update();return;}
-    const auto path=source_.toLocalFile();QImageReader reader(path);const auto size=reader.size();
+    if(!source_.isLocalFile()&&source_.scheme()!="qrc"){update();return;}
+    const auto path=source_.scheme()=="qrc"?":"+source_.path():source_.toLocalFile();QImageReader reader(path);const auto size=reader.size();
     if(animated_&&reader.format().toLower()=="gif"){
         movie_.setFileName(path);movie_.setScaledSize(size.scaled(512,512,Qt::KeepAspectRatio));movie_.start();movie_.setPaused(!isVisible());
     }else{reader.setScaledSize(size.scaled(512,512,Qt::KeepAspectRatio));auto decoded=reader.read();QMutexLocker lock(&imageMutex_);still_=std::move(decoded);}

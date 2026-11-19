@@ -1,5 +1,8 @@
 #include "minecraft.h"
+#include "localedition.h"
+#include "rustvisuals.h"
 #include <QDir>
+#include <QCoreApplication>
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -7,6 +10,7 @@
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QThread>
+#include <QTemporaryDir>
 #include <QVersionNumber>
 #include <QXmlStreamReader>
 
@@ -15,8 +19,8 @@ static QString enc(const QString &s) {
     return QString::fromLatin1(QUrl::toPercentEncoding(s));
 }
 QJsonArray Minecraft::versions(bool snapshots) {
-    auto manifest = net.json("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json").object();
-    writeObject(root + "/cache/version-manifest.json", manifest);
+    auto manifest = localEdition() ? readObject(root+"/cache/version-manifest.json", true) : net.json("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json").object();
+    if (!localEdition()) writeObject(root + "/cache/version-manifest.json", manifest);
     QJsonArray out;
     for (auto v : manifest["versions"].toArray()) {
         auto o = v.toObject();
@@ -27,7 +31,13 @@ QJsonArray Minecraft::versions(bool snapshots) {
 }
 QJsonObject Minecraft::gameVersion(const QString &v) {
     const auto path = safePath(root + "/cache/game/versions", v + '/' + v + ".json");
-    auto manifest = net.json("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json").object();
+    if (localEdition()) {
+        const auto profilePath = importSource.isEmpty()
+            ? path : safePath(importSource, "versions/" + v + '/' + v + ".json");
+        if (!QFileInfo::exists(profilePath)) throw Error("Import this Minecraft version from local files first: " + v);
+        return readObject(profilePath);
+    }
+    const auto manifest = net.json("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json").object();
     for (auto entry : manifest["versions"].toArray()) {
         auto o = entry.toObject();
         if (o["id"] != v)
@@ -41,6 +51,11 @@ QStringList Minecraft::loaders(const QString &game, const QString &loader) {
     QStringList result;
     if (loader == "Vanilla")
         return result;
+    if(localEdition()) {
+        const auto path=safePath(root+"/cache/local-loaders",game+'/'+loader);
+        for(const auto &file:QDir(path).entryList({"*.json"},QDir::Files,QDir::Name))result<<QFileInfo(file).completeBaseName();
+        return result;
+    }
     if (loader == "Fabric" || loader == "Quilt") {
         const QString base =
             loader == "Fabric" ? "https://meta.fabricmc.net/v2" : "https://meta.quiltmc.org/v3";
@@ -118,6 +133,21 @@ QString Minecraft::javaFor(int major, const QString &custom) {
     QString found = QStandardPaths::findExecutable("java");
     if (!found.isEmpty() && javaMajor(found) == major)
         return found;
+    if (localEdition()) {
+        const auto appData = qEnvironmentVariable("LOCALAPPDATA");
+        const QStringList roots{
+            qEnvironmentVariable("APPDATA") + "/.minecraft/runtime",
+            appData + "/Packages/Microsoft.4297127D64EC6_8wekyb3d8bbwe/LocalCache/Local/runtime",
+            qEnvironmentVariable("ProgramFiles(x86)") + "/Minecraft Launcher/runtime"};
+        for (const auto &folder : roots) {
+            QDirIterator java(folder, {"java.exe"}, QDir::Files, QDirIterator::Subdirectories);
+            while (java.hasNext()) {
+                const auto exe = java.next();
+                if (javaMajor(exe) == major) return exe;
+            }
+        }
+        throw Error(QString("Install Java %1 or select its java.exe in Settings → Advanced.").arg(major));
+    }
     net.ctx.report(QString("Getting Java %1 from Eclipse Adoptium…").arg(major));
     auto versions = net.json(QString("https://api.adoptium.net/v3/assets/latest/%1/"
                                      "hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse")
@@ -204,6 +234,7 @@ QJsonObject Minecraft::loaderProfile(const QJsonObject &instance, const QJsonObj
             throw Error(loader + " has no supported loader for " + game);
         version = all.first();
     }
+    if(localEdition())return readObject(safePath(root+"/cache/local-loaders",game+'/'+loader+'/'+version+".json"));
     QJsonObject custom;
     if (loader == "Fabric" || loader == "Quilt") {
         QString base = loader == "Fabric" ? "https://meta.fabricmc.net/v2" : "https://meta.quiltmc.org/v3";
@@ -273,9 +304,109 @@ QJsonObject Minecraft::loaderProfile(const QJsonObject &instance, const QJsonObj
     merged["molyLoaderVersion"] = version;
     return merged;
 }
+QJsonArray Minecraft::importLocalLibrary(const QString &source) {
+    if (!localEdition()) throw Error("This action is for Moly Local Launcher.");
+    const auto selected = QFileInfo(source).canonicalFilePath();
+    if (selected.isEmpty()) throw Error("Choose the Minecraft data folder containing versions, assets and libraries.");
+    importSource = QFileInfo(selected + "/cache/game/versions").isDir() ? selected + "/cache/game" : selected;
+    if (QFileInfo(importSource).canonicalFilePath().compare(QFileInfo(root + "/cache/game").canonicalFilePath(), Qt::CaseInsensitive) == 0)
+        throw Error("Choose the source Minecraft folder outside Moly Local.");
+    QTemporaryDir staging(root + "/local-import-XXXXXX");
+    if (!staging.isValid()) throw Error("Could not create temporary space for the import.");
+    importWorkspace = staging.path();
+    net.localGameSource = importSource;
+    net.localGameDestination = root + "/cache/game";
+    auto manifest = readObject(root + "/cache/version-manifest.json", true);
+    auto catalog = manifest["versions"].toArray();
+    const auto folders = QDir(importSource + "/versions").entryList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks, QDir::Name | QDir::Reversed);
+    int imported = 0;
+    QString lastError;
+    for (const auto &id : folders) {
+        net.ctx.check();
+        if (!QRegularExpression("^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$").match(id).hasMatch()) continue;
+        try {
+            const auto profile = gameVersion(id);
+            const auto type = profile["type"].toString();
+            if (profile["id"] != id || (type != "release" && type != "snapshot")
+                || profile.contains("inheritsFrom") || profile["mainClass"] != "net.minecraft.client.main.Main"
+                || !profile["arguments"].isObject()) continue;
+            install({{"id", id}, {"version", id}, {"loader", "Vanilla"}}, {});
+            net.ctx.check();
+            writeObject(safePath(root + "/cache/game/versions", id + '/' + id + ".json"), profile);
+            for (qsizetype i = catalog.size(); i > 0; --i)
+                if (catalog[i - 1].toObject()["id"] == id) catalog.removeAt(i - 1);
+            catalog.prepend(QJsonObject{{"id", id}, {"type", type}});
+            manifest["versions"] = catalog;
+            writeObject(root + "/cache/version-manifest.json", manifest);
+            ++imported;
+        } catch (const std::exception &e) {
+            net.ctx.check();
+            lastError = QString::fromUtf8(e.what());
+        }
+    }
+    if (!imported) throw Error(lastError.isEmpty() ? "No supported vanilla versions found. Launch your desired version in Minecraft first." : lastError);
+    return catalog;
+}
+
 QJsonObject Minecraft::install(const QJsonObject &instance, const QJsonObject &settings) {
+    if(instance["engine"]=="moly-rust") {
+        const auto tools=QCoreApplication::applicationDirPath()+"/engines";
+        if(!QFileInfo::exists(tools+"/moly-rust.exe")||!QFileInfo::exists(tools+"/moly-rust-prepare.exe"))
+            throw Error("Rust Edition engine is missing. Install the current Moly package.");
+        const auto dir=safePath(root+"/instances",instance["id"].toString());
+        // Keep the previous engine cache intact while preparing this revision's resources.
+        const auto support=root+"/cache/rust-engine/cc94ed7";
+        QDir().mkpath(support);
+        copyTree(tools+"/horizon-support",support,net.ctx);
+        const auto prepared=support+"/prepared";
+        auto run=[&](QStringList args,bool allowFailure=false) {
+            QProcess process;process.setWorkingDirectory(support);process.setProcessChannelMode(QProcess::MergedChannels);
+            process.start(tools+"/moly-rust-prepare.exe",args);
+            if(!process.waitForStarted(10000))throw Error("Rust resource preparation could not start.");
+            QByteArray pending,tail;
+            while(!process.waitForFinished(100)) {
+                if(net.ctx.cancel&&net.ctx.cancel->load()){process.kill();process.waitForFinished();net.ctx.check();}
+                pending+=process.readAll();
+                while(pending.contains('\n')) {
+                    auto line=pending.left(pending.indexOf('\n'));pending.remove(0,pending.indexOf('\n')+1);
+                    tail=(tail+line+'\n').right(6000);
+                    const auto event=QJsonDocument::fromJson(line).object();
+                    if(event.contains("fraction"))net.ctx.report("Preparing Rust Edition resources",qint64(event["fraction"].toDouble()*1000),1000);
+                    else if(!event["message"].toString().isEmpty())net.ctx.report(event["message"].toString());
+                }
+            }
+            tail=(tail+pending+process.readAll()).right(6000);
+            if((process.exitStatus()!=QProcess::NormalExit||process.exitCode()!=0)&&!allowFailure)
+                throw Error("Rust preparation failed: "+redact(QString::fromUtf8(tail)));
+            return process.exitStatus()==QProcess::NormalExit&&process.exitCode()==0;
+        };
+        if(!run({"--root",support,"--output",prepared,"--check"},true)) {
+            const auto previous=readObject(dir+"/installation.json",true);
+            try {
+                auto vanilla=instance;vanilla.remove("engine");vanilla["version"]="26.3";vanilla["loader"]="Vanilla";vanilla.remove("loaderVersion");
+                const auto game=gameVersion("26.3");
+                const auto javaState=install(vanilla,settings);
+                // Java installation is intermediate, never mark Rust ready before preparation succeeds.
+                if(previous.isEmpty())QFile::remove(dir+"/installation.json");else writeObject(dir+"/installation.json",previous);
+                const auto server=game["downloads"].toObject()["server"].toObject();
+                const auto serverPath=support+"/server-26.3.jar";
+                net.downloads({{server["url"].toString(),serverPath,server["sha1"].toString(),"sha1",qint64(server["size"].toDouble(-1))}});
+                const auto javaHome=QFileInfo(javaState["java"].toString()).dir().absoluteFilePath("..");
+                net.ctx.report("Preparing Rust Edition from your Minecraft files");
+                run({"--root",support,"--prepare","--version-json",root+"/cache/game/versions/26.3/26.3.json",
+                    "--client-jar",root+"/cache/game/versions/26.3/26.3.jar","--libraries-dir",root+"/cache/game/libraries",
+                    "--assets-dir",root+"/cache/game/assets","--server-jar",serverPath,"--java-home",javaHome,
+                    "--output",prepared,"--complete","--progress","json"});
+            }catch(...) {if(previous.isEmpty())QFile::remove(dir+"/installation.json");else writeObject(dir+"/installation.json",previous);throw;}
+        }
+        QDir().mkpath(dir+"/game/mods");
+        if(instance["settings"].toObject().contains("rustVisuals"))RustVisuals::apply(dir+"/game",instance["settings"].toObject()["rustVisuals"].toObject(),net.ctx);
+        const QJsonObject state{{"engine","moly-rust"},{"schemaVersion",2},{"resources",prepared},{"gameDirectory",dir+"/game"}};
+        writeObject(dir+"/installation.json",state);net.ctx.report("Rust Edition ready",1,1);return state;
+    }
+
     const QString id = instance["id"].toString(), game = instance["version"].toString();
-    QString dir = safePath(root + "/instances", id);
+    QString dir = importWorkspace.isEmpty() ? safePath(root + "/instances", id) : safePath(importWorkspace, id);
     QDir().mkpath(dir + "/game");
     // Each phase reports measured work in its own units. Metadata, extraction and official
     // installer execution have no reliable total, so they deliberately remain unspecified.
@@ -287,7 +418,7 @@ QJsonObject Minecraft::install(const QJsonObject &instance, const QJsonObject &s
     int major = vanilla["javaVersion"].toObject()["majorVersion"].toInt(8);
     auto overrides = instance["settings"].toObject();
     auto custom = overrides["javaPath"].toString(settings["javaPath"].toString());
-    QString java = javaFor(major, custom),
+    QString java = importWorkspace.isEmpty() ? javaFor(major, custom) : QString(),
             client = safePath(root + "/cache/game/versions", game + '/' + game + ".jar");
     auto c = vanilla["downloads"].toObject()["client"].toObject();
     auto ai = vanilla["assetIndex"].toObject();
@@ -329,6 +460,7 @@ QJsonObject Minecraft::install(const QJsonObject &instance, const QJsonObject &s
         logging.replace("${path}", QUrl::fromLocalFile(path).toString(QUrl::FullyEncoded));
     }
     net.ctx.check();
+    if (!importWorkspace.isEmpty()) return {};
     QJsonObject state{{"schemaVersion", 1},
                       {"java", java},
                       {"javaMajor", major},
@@ -349,6 +481,28 @@ QJsonObject Minecraft::install(const QJsonObject &instance, const QJsonObject &s
 LaunchCommand Minecraft::command(const QJsonObject &state, const QJsonObject &instance,
                                  const QJsonObject &global, const QJsonObject &account,
                                  const QString &token) {
+
+    if(instance["engine"]=="moly-rust") {
+        const auto executable=QCoreApplication::applicationDirPath()+"/engines/moly-rust.exe";
+        if(!QFileInfo::exists(executable))throw Error("Rust Edition engine is missing. Reinstall Moly.");
+        const auto game=state["gameDirectory"].toString(),resources=state["resources"].toString();
+        if(game.isEmpty()||resources.isEmpty()||!QFileInfo::exists(resources+"/horizon-resources.json"))
+            throw Error("Repair this Rust instance to prepare the actual engine. Prototype worlds are not Minecraft worlds.");
+        const auto local=instance["settings"].toObject();
+        QStringList args{"--resources",resources,"--game-dir",game,"--player-dir",game,"--home",QFileInfo(game).dir().absoluteFilePath("rust-home"),
+            "--width",QString::number(local["width"].toInt(global["width"].toInt(1280))),
+            "--height",QString::number(local["height"].toInt(global["height"].toInt(720))),"--name",account["name"].toString("Player")};
+        if(local["fullscreen"].toBool(global["fullscreen"].toBool()))args<<"--fullscreen";
+        if(!token.isEmpty())args<<"--session-stdin";
+        // .rjar is Moly's extension for engine-compatible content archives.
+        // Disabled files never enter the engine's explicit mod list.
+        for(const auto &file:QDir(game+"/mods").entryInfoList({"*.rjar"},QDir::Files,QDir::Name))args<<"--dev-mod"<<file.absoluteFilePath();
+        const auto target=instance["_quickPlay"].toObject();
+        if(target["type"]=="world")args<<"--quickPlaySingleplayer"<<target["value"].toString();
+        if(target["type"]=="server")args<<"--quickPlayMultiplayer"<<target["value"].toString();
+        return {executable,game,args};
+    }
+
     auto settings = global;
     auto overrides = instance["settings"].toObject();
     for (auto i = overrides.begin(); i != overrides.end(); ++i)

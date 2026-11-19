@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.5 - Rust Edition refresh and launcher updates
+
+- Updated Rust Edition engine to cc94ed7af, with upstream shader, controller, rendering and gameplay fixes. Minecraft target remains 26.3.
+- Fixed Rust instance player-settings paths so selected shaders and graphics settings reach the engine.
+- Added automatic GitHub release checks at startup and every six hours, manual checks, release notes and a Windows installer download button.
+- Updated engine resource exporters and isolated the new engine cache from the previous revision.
+- Validation: 78 Rust mod/shader tests, 11 launcher test suites, and an isolated rendered world with Moly Colour loaded.
+
 ## 0.8.4 - Account skins and friendlier folders
 
 - The wardrobe now loads the skin of the signed-in Minecraft account automatically: the active Microsoft account's skin is fetched in the background at startup, after sign-in or account switch, and appears as an "MC ACCOUNT" card in the skin grid (ready to reselect or re-apply).

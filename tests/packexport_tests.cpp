@@ -44,6 +44,30 @@ class PackExportTests : public QObject {
         return root + "/instances/" + instance["id"].toString();
     }
   private slots:
+    void unicodePathsSurviveExportAndImportIntoAnotherRoot() {
+        QTemporaryDir sender,receiver;
+        const auto instance=fixture(sender.path());
+        const QStringList names{QString::fromUtf8("config/не попался.lrc"),QString::fromUtf8("config/中文/設定.json"),QString::fromUtf8("resourcepacks/ąčęėįšųūž.zip")};
+        for(const auto &name:names)writeBytes(sender.path()+"/instances/original/game/"+name,"portable unicode payload");
+        for(const auto &format:QStringList{"mlypack","mrpack"}) {
+            const auto archive=sender.path()+"/unicode."+format;
+            PackExport::write(sender.path(),instance,archive,format);
+            for(const auto &name:names)QCOMPARE(zipEntry(archive,(format=="mrpack"?"overrides/":"game/")+name),QByteArray("portable unicode payload"));
+            if(format=="mlypack") {
+                const auto imported=PackExport::importMoly(receiver.path(),archive);
+                for(const auto &name:names)QCOMPARE(fileHash(importedDirectory(receiver.path(),imported)+"/game/"+name),fileHash(sender.path()+"/instances/original/game/"+name));
+            }
+        }
+    }
+    void externalPortablePackImportsIntoFreshStorage() {
+        const auto archive=QString::fromUtf8(qgetenv("MOLY_TEST_PORTABLE_PACK"));
+        if(archive.isEmpty())QSKIP("Set MOLY_TEST_PORTABLE_PACK for an opt-in real-pack import check");
+        QTemporaryDir receiver;
+        try {
+            const auto imported=PackExport::importMoly(receiver.path(),archive);
+            QVERIFY(QFileInfo::exists(importedDirectory(receiver.path(),imported)+"/instance.json"));
+        } catch(const std::exception &error) { QFAIL(error.what()); }
+    }
     void selectiveExportRoundtripWithBinaryPayload() {
         QTemporaryDir storage;
         const auto instance=fixture(storage.path());

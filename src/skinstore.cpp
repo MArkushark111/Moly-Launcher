@@ -15,7 +15,7 @@ using namespace moly;
 namespace {
 // Skin library entries are keyed by UUID (Mojang profile ids are undashed) or "default-*".
 bool validId(const QString &id) {
-    return id == "moly-default" || QStringList{"default-steve","default-alex","default-ari","default-efe","default-kai","default-makena","default-noor","default-sunny","default-zuri"}.contains(id) || QRegularExpression("^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$").match(id).hasMatch() || QRegularExpression("^[0-9a-f]{32}$").match(id).hasMatch();
+    return id == "moly-default" || QStringList{"default-moly","default-steve","default-alex","default-ari","default-efe","default-kai","default-makena","default-noor","default-sunny","default-zuri"}.contains(id) || QRegularExpression("^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$").match(id).hasMatch() || QRegularExpression("^[0-9a-f]{32}$").match(id).hasMatch();
 }
 bool validModel(const QString &model) { return model == "classic" || model == "slim"; }
 // Slim textures reserve two transparent columns after each base arm's back face.
@@ -34,10 +34,18 @@ bool hasSlimArms(const QImage &image) {
 }
 
 static void initializeDefaultSkins() {
+#ifndef MOLY_PUBLIC_BUILD
     static const bool initialized=[] { Q_INIT_RESOURCE(default_skins);return true; }();
     Q_UNUSED(initialized)
+#endif
 }
-static QStringList defaultNames(){return {"Steve","Alex","Ari","Efe","Kai","Makena","Noor","Sunny","Zuri"};}
+static QStringList defaultNames() {
+#ifdef MOLY_PUBLIC_BUILD
+    return {"Moly"};
+#else
+    return {"Steve","Alex","Ari","Efe","Kai","Makena","Noor","Sunny","Zuri"};
+#endif
+}
 static bool builtIn(const QString &id){return id.startsWith("default-")&&validId(id);}
 QString SkinStore::modelFor(const QString &id) const {
     if(builtIn(id))return builtinModels.value(id).toString(QStringList{"default-alex","default-efe","default-makena","default-noor"}.contains(id)?"slim":"classic");
@@ -47,11 +55,26 @@ QString SkinStore::modelFor(const QString &id) const {
 SkinStore::SkinStore(const QString &dataRoot, QObject *parent) : QObject(parent), root(dataRoot + "/skins") {
     try {
         initializeDefaultSkins();QDir().mkpath(root);
+#ifdef MOLY_PUBLIC_BUILD
+        selection = "default-moly";
+#endif
         for(const auto &name:defaultNames())for(const auto &variant:QStringList{"classic","slim"}) {
             const auto id="default-"+name.toLower();
             const auto path=safePath(root,id+"-"+variant+".png");
             if(QFileInfo::exists(path))continue;
+#ifdef MOLY_PUBLIC_BUILD
+            auto image = defaultTexture();
+            if (variant == "slim") {
+                for (int y = 0; y < 12; ++y) {
+                    for (int x = 0; x < 2; ++x) {
+                        image.setPixelColor(54 + x, 20 + y, Qt::transparent);
+                        image.setPixelColor(46 + x, 52 + y, Qt::transparent);
+                    }
+                }
+            }
+#else
             const auto image=readSkin(":/moly/skins/"+QString(variant=="classic"?"wide":"slim")+"/"+name.toLower()+".png");
+#endif
             QByteArray png;QBuffer buffer(&png);buffer.open(QIODevice::WriteOnly);
             if(!image.save(&buffer,"PNG"))throw Error("Could not prepare a default skin.");
             writeBytes(path,png);
@@ -74,7 +97,7 @@ SkinStore::SkinStore(const QString &dataRoot, QObject *parent) : QObject(parent)
             }
         }
         const auto candidate=library["selected"].toString();
-        if(builtIn(candidate))selection=candidate;
+        if(builtIn(candidate) && QFileInfo::exists(imagePath(candidate)))selection=candidate;
         else for(const auto &value:entries)if(value.toObject()["id"]==candidate)selection=candidate;
         if(migrated)save();
     }catch(const std::exception &e){fail(QString::fromUtf8(e.what()));}
@@ -221,6 +244,29 @@ QVariantMap SkinStore::accountSkins() const {
     return result;
 }
 QImage SkinStore::defaultTexture() {
+#ifdef MOLY_PUBLIC_BUILD
+    QImage image(64, 64, QImage::Format_ARGB32);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    const auto part = [&](int x, int y, int w, int h, int d, QColor color) {
+        painter.fillRect(x + d, y, 2 * w, d, color.lighter(125));
+        painter.fillRect(x, y + d, 2 * (w + d), h, color);
+        painter.fillRect(x + d, y + d, w, h, color.lighter(112));
+    };
+    part(0, 0, 8, 8, 8, QColor("#694abc"));
+    part(16, 16, 8, 12, 4, QColor("#744fd6"));
+    part(40, 16, 4, 12, 4, QColor("#966df7"));
+    part(32, 48, 4, 12, 4, QColor("#966df7"));
+    part(0, 16, 4, 12, 4, QColor("#302451"));
+    part(16, 48, 4, 12, 4, QColor("#302451"));
+    painter.fillRect(8, 10, 8, 4, QColor("#241b39"));
+    painter.fillRect(9, 11, 2, 2, QColor("#f1ecff"));
+    painter.fillRect(13, 11, 2, 2, QColor("#f1ecff"));
+    painter.fillRect(22, 23, 4, 3, QColor("#e3d7ff"));
+    painter.end();
+    return image;
+#else
     initializeDefaultSkins();
     return readSkin(":/moly/skins/wide/steve.png");
+#endif
 }

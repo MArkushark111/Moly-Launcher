@@ -25,6 +25,7 @@ public:
     qint64 elapsedMs()const{return elapsed_.elapsed();}
     void configure(QColor accent,bool reduced){if(accent.isValid())accent_=accent;reduced_=reduced;emit changed();}
     void next(const QString &phase){if(completed_<total())++completed_;phase_=phase;emit changed();}
+    void status(const QString &phase){phase_=phase;emit changed();}
     void showInterface(){visible_=true;emit changed();}
 signals:
     void changed();

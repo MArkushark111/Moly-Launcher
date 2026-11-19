@@ -29,6 +29,8 @@
 #include <QIcon>
 #include <QPointer>
 #include "launcher.h"
+#include "localedition.h"
+#include "releaseupdates.h"
 #include "playtargets.h"
 #include "skinstore.h"
 #include "skinmodel.h"
@@ -48,7 +50,7 @@ static void logMessage(QtMsgType, const QMessageLogContext &, const QString &mes
     if(file.open(QIODevice::WriteOnly|QIODevice::Append))file.write((moly::redact(message)+"\n").toUtf8());
 }
 int main(int argc,char *argv[]) {
-    QGuiApplication app(argc,argv); app.setOrganizationName("Moly");app.setApplicationName("Moly Launcher");app.setApplicationVersion("0.8.4");
+    QGuiApplication app(argc,argv); app.setOrganizationName("Moly");app.setApplicationName(moly::localEdition()?"Moly Local Launcher":"Moly Launcher");app.setApplicationVersion("0.8.5");
     QQuickStyle::setStyle("Basic");
     QFontDatabase::addApplicationFont(":/qt/qml/Moly/assets/Inter.ttf");
     app.setWindowIcon(QIcon(":/qt/qml/Moly/assets/moly.svg"));
@@ -80,11 +82,29 @@ int main(int argc,char *argv[]) {
         try{const auto config=moly::readObject(root+"/settings.json",true);startup.configure(QColor(config["accentColor"].toString("#8b5cf6")),config["reducedMotion"].toBool());}catch(const std::exception &){}
         QQmlApplicationEngine startupEngine;startupEngine.rootContext()->setContextProperty("startup",&startup);startupEngine.loadFromModule("Moly","Startup");
         QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents,20);
+#ifndef MOLY_PUBLIC_BUILD
+        if(moly::localEdition()) {
+            const auto payload=QCoreApplication::applicationDirPath()+"/local-library";
+            moly::Context copyContext;QElapsedTimer repaint;repaint.start();
+            copyContext.progress=[&](QString,qint64 done,qint64 total){if(repaint.elapsed()>100){startup.status(QString("Preparing included files (%1/%2)").arg(done).arg(total));QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents,10);repaint.restart();}};
+            moly::seedLocalLibrary(payload,root,copyContext);
+        }
+#endif
         Launcher launcher(root);
         startup.configure(QColor(launcher.settings()["accentColor"].toString()),launcher.settings()["reducedMotion"].toBool());startup.next("Preparing player skins");
         QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents,20);
         if(parser.isSet("capture-startup"))for(auto object:startupEngine.rootObjects())if(auto window=qobject_cast<QQuickWindow*>(object))window->grabWindow().save(parser.value("capture-startup"));
         moly::PlayTargets targets(root);SkinStore skins(root);
+        moly::ReleaseUpdates releaseUpdates;
+        QTimer updateTimer;
+        updateTimer.setInterval(6 * 60 * 60 * 1000);
+        QObject::connect(&updateTimer, &QTimer::timeout, &releaseUpdates, [&] {
+            if (releaseUpdates.autoCheck()) releaseUpdates.check();
+        });
+        if (!moly::localEdition() && !parser.isSet("data-dir")) {
+            updateTimer.start();
+            QTimer::singleShot(8000, &releaseUpdates, [&] { if (releaseUpdates.autoCheck()) releaseUpdates.check(); });
+        }
         const auto discordOverride=QString::fromUtf8(qgetenv("MOLY_DISCORD_APPLICATION_ID"));
         moly::DiscordPresence discord(discordOverride.isEmpty()?QString(MOLY_DISCORD_APPLICATION_ID):discordOverride);
         discord.setActivityProvider([&](QString page,bool share){return launcher.presenceActivity(page,share);});
@@ -101,12 +121,13 @@ int main(int argc,char *argv[]) {
         QObject::connect(&skins,&SkinStore::applyRequested,&launcher,&Launcher::applySkin);
         QObject::connect(&launcher,&Launcher::accountSkinFound,&skins,&SkinStore::setAccountSkin);
         startup.next("Loading your workspace");QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents,20);
-        QQmlApplicationEngine engine;engine.rootContext()->setContextProperty("startup",&startup);engine.rootContext()->setContextProperty("launcher",&launcher);
+        QQmlApplicationEngine engine;engine.rootContext()->setContextProperty("molyLocalEdition",moly::localEdition());engine.rootContext()->setContextProperty("startup",&startup);engine.rootContext()->setContextProperty("launcher",&launcher);
         engine.rootContext()->setContextProperty("playTargets",&targets);engine.rootContext()->setContextProperty("skinStore",&skins);engine.rootContext()->setContextProperty("discordPresence",&discord);
+        engine.rootContext()->setContextProperty("releaseUpdates", &releaseUpdates);
         targetRefresh.start();
         QObject::connect(&engine,&QQmlApplicationEngine::objectCreationFailed,&app,[]{QCoreApplication::exit(1);},Qt::QueuedConnection);
         engine.rootContext()->setContextProperty("diagnosticRun",parser.isSet("data-dir"));
-        QTimer::singleShot(1500,&launcher,[&]{if(!parser.isSet("data-dir")) {
+        QTimer::singleShot(1500,&launcher,[&]{if(!moly::localEdition()&&!parser.isSet("data-dir")) {
             QSettings registration;const auto executable=QCoreApplication::applicationFilePath();
             if(registration.value("packAssociationExecutable").toString()!=executable)try{moly::registerMolyPackFiles(executable);registration.setValue("packAssociationExecutable",executable);}catch(const std::exception &e){emit launcher.notice(QString::fromUtf8(e.what()),true);}
             if(launcher.settings().value("startWithWindows").toBool())try{moly::setStartWithWindows(executable,true);}catch(const std::exception &e){emit launcher.notice(QString::fromUtf8(e.what()),true);}

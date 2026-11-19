@@ -50,3 +50,14 @@ Provider marks: Modrinth and CurseForge SVGs are from [Simple Icons](https://git
 Import-source logos identify their respective launchers. Prism mark: https://github.com/PrismLauncher/PrismLauncher/blob/develop/program_info/org.prismlauncher.PrismLauncher.svg ; MultiMC mark: https://github.com/MultiMC/Launcher/blob/develop/branding/logo.svg ; ATLauncher mark: https://github.com/ATLauncher/ATLauncher/blob/master/src/main/resources/assets/image/icon.png ; Lunar Client favicon: https://support.lunarclient.com/favicon.ico . These marks belong to their respective owners; Moly is independent of those projects. The generic Minecraft-folder pictogram is original Moly artwork.
 
 Additional import-source marks are unmodified identifying assets from their owners: Dawn (https://dawn.gg/icon.png), Fast Client (https://www.fastclient.net/favicon.svg), NoRisk Client (https://github.com/NoRiskClient/noriskclient-launcher/blob/v3/src-tauri/icons/128x128.png), Badlion Client and LabyMod (their verified GitHub organization avatars at https://github.com/BadlionClient and https://github.com/LabyMod), Feather (https://feathermc.com/favicon/favicon-32x32.png), and GDLauncher (https://gdlauncher.com/favicon.ico). They identify compatible source folders and do not imply affiliation.
+
+
+## Horizon engine (Rust Edition)
+
+Moly Rust Edition uses Horizon source at commit
+6475f62f3c834b7489e1816bf47f47ea5eb2b879, available in the
+`third_party/horizon` Git submodule (https://github.com/horizon-rust/horizon).
+Copyright (c) 2026 Ludovic Marie and the Horizon contributors, MIT licensed.
+The full copyright, permission text and upstream dependency notices ship in
+`licenses/horizon/`. The retired Moly creative prototype is not the engine used
+by this build. No Minecraft game jars or prepared game assets are distributed.

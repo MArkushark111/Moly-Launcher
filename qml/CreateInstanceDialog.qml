@@ -20,14 +20,14 @@ LiquidDialog {
             spacing: 10
             Text { text: "START HERE"; color: Theme.textMuted; font.pixelSize: 10; font.letterSpacing: 1 }
             Repeater {
-                model: [{title:"Build your own",icon:"settings",hint:"Version + loader"},{title:"Find a modpack",icon:"discover",hint:"Ready-made setups"},{title:"Bring a setup",icon:"folder",hint:"From your computer"}]
+                model: [{title:"Build your own",icon:"settings",hint:"Version + loader"},{title:shell.localOnly?"Import a pack":"Find a modpack",icon:"discover",hint:shell.localOnly?"From local files":"Ready-made setups"},{title:"Bring a setup",icon:"folder",hint:"From your computer"}]
                 delegate: ItemDelegate {
                     required property var modelData
                     required property int index
                     Layout.fillWidth: true
                     implicitHeight: 82
                     padding: 12
-                    onClicked: dialog.choice=index
+                    onClicked: dialog.choice=(shell.localOnly && index===1)?2:index
                     background: Rectangle { radius: 14; color: dialog.choice===index?Theme.accentSoft:parent.hovered?Theme.surface2:Theme.transparent; border.color: parent.activeFocus?Theme.textSecondary:Theme.transparent }
                     contentItem: ColumnLayout {
                         spacing: 5
@@ -51,18 +51,19 @@ LiquidDialog {
             ColumnLayout {
                 spacing: 12
                 Text { text:"Make it yours";color:Theme.text;font.pixelSize:21;font.weight:Font.DemiBold }
-                Text { text:"Choose your game version. Moly will install the files and Java runtime for you.";color:Theme.textSecondary;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true }
+                MComboBox { id:edition;Layout.fillWidth:true;model:["Java Edition","Rust Edition"] }
+                Text { text:edition.currentIndex===1?"Moly Rust Edition uses standard Minecraft controls and worlds. First setup prepares resources from Minecraft 26.3. Java mods do not run in this edition.":(shell.localOnly?"Choose an imported version. Moly Local uses your installed Java runtime.":"Choose your game version. Moly will install the files and Java runtime for you.");color:Theme.textSecondary;font.pixelSize:12;wrapMode:Text.Wrap;Layout.fillWidth:true }
                 MField { id:setupName;Layout.fillWidth:true;placeholderText:"Give this instance a name";maximumLength:80;Accessible.name:"Instance name" }
                 RowLayout {
-                    Layout.fillWidth:true;spacing:10
+                    visible:edition.currentIndex===0;Layout.fillWidth:true;spacing:10
                     ColumnLayout { Layout.fillWidth:true;Text{text:"Minecraft";color:Theme.textSecondary;font.pixelSize:12} MComboBox {id:gameVersion;enabled:!launcher.busy;Layout.fillWidth:true;model:launcher.versions.map(function(v){return v.id});onActivated:if(loaderChoice.currentText!=="Vanilla")launcher.refreshLoaders(currentText,loaderChoice.currentText)} }
                     ColumnLayout { Layout.fillWidth:true;Text{text:"Loader";color:Theme.textSecondary;font.pixelSize:12} MComboBox {id:loaderChoice;enabled:!launcher.busy;Layout.fillWidth:true;model:["Vanilla","Fabric","Forge","NeoForge","Quilt"];onActivated:launcher.refreshLoaders(gameVersion.currentText,currentText)} }
                 }
-                MComboBox { id:loaderVersion;enabled:!launcher.busy;visible:loaderChoice.currentText!=="Vanilla";model:launcher.loaderVersions;Layout.fillWidth:true;Accessible.name:"Loader version" }
-                MCheckBox { enabled:!launcher.busy;text:"Include snapshots";onToggled:launcher.refreshVersions(checked) }
+                MComboBox { id:loaderVersion;enabled:!launcher.busy;visible:edition.currentIndex===0&&loaderChoice.currentText!=="Vanilla";model:launcher.loaderVersions;Layout.fillWidth:true;Accessible.name:"Loader version" }
+                MCheckBox { visible:edition.currentIndex===0;enabled:!launcher.busy;text:"Include snapshots";onToggled:launcher.refreshVersions(checked) }
                 Text { text:launcher.busy?launcher.status:"You can add mods, artwork, and packs afterwards.";color:Theme.textMuted;font.pixelSize:11;wrapMode:Text.Wrap;Layout.fillWidth:true }
                 Item { Layout.fillHeight:true }
-                MButton { text:"Create & install";iconName:"plus";kind:"primary";Layout.alignment:Qt.AlignRight;enabled:!launcher.busy&&setupName.text.trim().length>0&&gameVersion.currentText.length>0&&(loaderChoice.currentText==="Vanilla"||loaderVersion.currentText.length>0);onClicked:{launcher.createInstance(setupName.text,gameVersion.currentText,loaderChoice.currentText,loaderChoice.currentText==="Vanilla"?"":loaderVersion.currentText);dialog.close();setupName.clear()} }
+                MButton { text:"Create & install";iconName:"plus";kind:"primary";Layout.alignment:Qt.AlignRight;enabled:!launcher.busy&&setupName.text.trim().length>0&&(edition.currentIndex===1||(gameVersion.currentText.length>0&&(loaderChoice.currentText==="Vanilla"||loaderVersion.currentText.length>0)));onClicked:{if(edition.currentIndex===1)launcher.createRustInstance(setupName.text);else launcher.createInstance(setupName.text,gameVersion.currentText,loaderChoice.currentText,loaderChoice.currentText==="Vanilla"?"":loaderVersion.currentText);dialog.close();setupName.clear()} }
             }
             ColumnLayout {
                 spacing:10

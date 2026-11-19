@@ -939,6 +939,7 @@ static QJsonObject embeddedModMetadata(const QString &archive, const QString &ca
         };
         QString icon;
         if (!readSmall("pack.png",4*1024*1024).isEmpty()) icon="pack.png";
+        else if(!readSmall("icon.png",4*1024*1024).isEmpty())icon="icon.png";
         const auto fabric = QJsonDocument::fromJson(readSmall("fabric.mod.json", 1024 * 1024)).object();
         if (!fabric.isEmpty()) {
             metadata["title"] = fabric["name"];

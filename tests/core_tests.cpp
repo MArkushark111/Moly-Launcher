@@ -1,16 +1,57 @@
 #include <QtTest>
 #include <QTemporaryDir>
+#include <QCoreApplication>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QUrl>
 #include <private/qzipwriter_p.h>
 #include "core.h"
 #include "content.h"
 #include "minecraft.h"
+#include "rustvisuals.h"
 #include "accounts.h"
 using namespace moly;
 class CoreTests : public QObject {
     Q_OBJECT
 private slots:
+    void rustVisualsReachNativeFilesAndPreserveOtherOptions() {
+        QTemporaryDir game;
+        writeBytes(game.path()+"/options.txt","lang:fr_fr\nrenderDistance:8\nkey_key.jump:key.keyboard.j\n");
+        writeBytes(game.path()+"/horizon-graphics.txt","futureSetting:keep\nlodDistance:64\n");
+        QJsonObject values{{"nearChunks",16},{"distantChunks",1024},{"fps",144},{"resolutionScale",100},
+            {"graphicsApi","auto"},{"shaderPack",""},{"fxaa",true},{"vsync",false},{"profile","vista"}};
+        values["access_token"]="must-not-export";
+        QVERIFY(!RustVisuals::validate(values).contains("access_token"));
+        RustVisuals::apply(game.path(),values);
+        const auto read=RustVisuals::read(game.path());
+        QCOMPARE(read["distantChunks"].toInt(),1024);QCOMPARE(read["nearChunks"].toInt(),16);
+        QVERIFY(read["fxaa"].toBool());QVERIFY(!read["vsync"].toBool());
+        QFile base(game.path()+"/options.txt");QVERIFY(base.open(QIODevice::ReadOnly));const auto text=base.readAll();
+        QVERIFY(text.contains("lang:fr_fr"));QVERIFY(text.contains("key_key.jump:key.keyboard.j"));
+        QFile extra(game.path()+"/horizon-graphics.txt");QVERIFY(extra.open(QIODevice::ReadOnly));QVERIFY(extra.readAll().contains("futureSetting:keep"));
+        values["distantChunks"]=1025;QVERIFY_EXCEPTION_THROWN(RustVisuals::validate(values),Error);
+        values["distantChunks"]=1024;values["shaderPack"]="../unsafe.zip";QVERIFY_EXCEPTION_THROWN(RustVisuals::validate(values),Error);
+    }
+
+    void rustLaunchUsesPinnedEngineResourcesAndPrivateSession() {
+        if(!QFileInfo::exists(QCoreApplication::applicationDirPath()+"/engines/moly-rust.exe"))QSKIP("Rust engine is not built in this test directory");
+        QTemporaryDir data;
+        QDir().mkpath(data.path()+"/resources");
+        writeObject(data.path()+"/resources/horizon-resources.json",{{"schema",7}});
+        const QJsonObject state{{"gameDirectory",data.path()},{"resources",data.path()+"/resources"}};
+        const QJsonObject instance{{"engine","moly-rust"},{"settings",QJsonObject{{"width",1600},{"fullscreen",true}}}};
+        const auto command=Minecraft::command(state,instance,{},{{"name","Test"}},"secret-session-token");
+        QVERIFY(command.program.endsWith("moly-rust.exe"));
+        QVERIFY(command.arguments.contains("--session-stdin"));
+        QVERIFY(command.arguments.contains("--resources"));
+        const auto playerDirectoryArgument=command.arguments.indexOf("--player-dir");
+        QVERIFY(playerDirectoryArgument>=0);
+        QCOMPARE(command.arguments.value(playerDirectoryArgument+1),data.path());
+        QVERIFY(command.arguments.contains("1600"));
+        QVERIFY(command.arguments.contains("--fullscreen"));
+        QVERIFY(!command.arguments.join(' ').contains("secret-session-token"));
+    }
+
     void minecraftAuthErrorsDoNotConfuseAuthorizationWithOwnership(){
         MinecraftServiceError denied(HttpError("raw",403,true));QVERIFY(denied.accessReview);QVERIFY(QString::fromUtf8(denied.what()).contains("app registration"));
         MinecraftServiceError unknown(HttpError("raw",403));QVERIFY(QString::fromUtf8(unknown.what()).contains("does not confirm"));

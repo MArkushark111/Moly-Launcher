@@ -14,7 +14,7 @@ try {
     ctest --test-dir $BuildDirectory --output-on-failure
     if ($LASTEXITCODE) { throw 'Tests failed.' }
     if ($Package) {
-        $packageDirectory = "dist/MolyLauncher-0.8.4"
+        $packageDirectory = "dist/MolyLauncher-0.8.5"
         cmake --install $BuildDirectory --prefix $packageDirectory
         if ($LASTEXITCODE) { throw 'Deployment failed.' }
         Copy-Item README.md, THIRD_PARTY.md, CHANGELOG.md -Destination $packageDirectory
@@ -23,7 +23,7 @@ try {
         New-Item -ItemType Directory -Path $guideDirectory -Force | Out-Null
         Copy-Item docs/MICROSOFT_SIGN_IN.md, docs/TESTING.md, docs/PORTABLE_PACKS.md -Destination $guideDirectory
         $portableFiles = (Get-ChildItem $packageDirectory | Where-Object Name -ne 'bin').FullName
-        Compress-Archive -Path $portableFiles -DestinationPath dist/MolyLauncher-0.8.4-Windows-x64.zip -Force
+        Compress-Archive -Path $portableFiles -DestinationPath dist/MolyLauncher-0.8.5-Windows-x64.zip -Force
         if (-not $InnoCompiler) {
             $localInno = Join-Path $env:LOCALAPPDATA 'Programs/Inno Setup 7/ISCC.exe'
             if (Test-Path -LiteralPath $localInno) { $InnoCompiler = $localInno }

@@ -1,12 +1,15 @@
 #include "instanceimport.h"
 #include "fileassociation.h"
 #include <QCoreApplication>
+#include <QProcessEnvironment>
 #include "launcher.h"
+#include "localedition.h"
 #include "accounts.h"
 #include "content.h"
 #include "minecraft.h"
 #include "artwork.h"
 #include "packexport.h"
+#include "rustvisuals.h"
 #include "playtargets.h"
 #include "skinstore.h"
 #include <QBuffer>
@@ -98,6 +101,9 @@ void Launcher::load() {
                   {"javaPath", ""},
                   {"jvmArgs", ""},
                   {"microsoftClientId", QString::fromUtf8(qgetenv("MOLY_MICROSOFT_CLIENT_ID"))}};
+    if(localEdition()) {
+        config["localEdition"]=true;config["serverPing"]=false;config["discordPresence"]=false;config["startupPage"]="library";
+    }
     if (!QRegularExpression("^#[0-9a-fA-F]{6}$").match(config["accentColor"].toString()).hasMatch())
         config["accentColor"] = "#8b5cf6";
     const auto validClient=[](const QString &value){return QRegularExpression("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").match(value).hasMatch();};
@@ -157,8 +163,11 @@ QVariantList Launcher::instances() const {
         instance["status"] = instance["running"].toBool()     ? "Running"
                              : instance["installed"].toBool() ? "Installed"
                                                               : "Not installed";
-        instance["modCount"] =
-            QDir(dir + "/game/mods").entryList({"*.jar", "*.jar.disabled"}, QDir::Files).size();
+        instance["modCount"] = QDir(dir+"/game/mods").entryList(instance["engine"]=="moly-rust" ? QStringList{"*.rjar","*.rjar.disabled"} : QStringList{"*.jar","*.jar.disabled"},QDir::Files).size();
+        if(instance["engine"]=="moly-rust"&&instance["installed"].toBool()) {
+            try{instance["installed"]=readObject(dir+"/installation.json")["schemaVersion"].toInt()>=2;}catch(...){instance["installed"]=false;}
+            if(!instance["installed"].toBool())instance["status"]="Needs preparation";
+        }
         instance["iconUrl"] = QString();
         instance["iconUrl"] = artworkUrl(dir,instance["iconFile"].toString(),instance["iconRevision"].toString());
         if(instance["iconUrl"].toString().isEmpty())instance["iconUrl"]=instance["sourceIconUrl"].toString();
@@ -309,7 +318,7 @@ void Launcher::task(const QString &title, std::function<QJsonObject(Context)> wo
                             [this, generation, recordJob, text, doneCount, total] {
                                 if (generation != taskGeneration || !working)
                                     return;
-                                statusText = redact(text.left(300));
+                                statusText = redact(text.left(300)).replace("Horizon", "Moly");
                                 if(!text.startsWith("Downloading ")){transferSpeed=0;transferBytes=0;transferTotal=-1;}
                                 if (total > 0) {
                                     const auto value = double(doneCount) / double(total);
@@ -445,6 +454,17 @@ void Launcher::retry() {
         task(retryTitle, retryWork, retryDone, retryInstanceId, retryOperation);
     }
 }
+void Launcher::importLocalLibrary(const QString &url) {
+    if (!localEdition() || working) return;
+    const auto base = root, source = localPath(url);
+    task("Importing Minecraft library", [base, source](Context context) {
+        return QJsonObject{{"versions", Minecraft(base, context).importLocalLibrary(source)}};
+    }, [this](QJsonObject result) {
+        versionList = result["versions"].toArray();
+        emit catalogChanged();
+        emit notice("Local Minecraft files imported.", false);
+    }, {}, "local-library");
+}
 void Launcher::refreshVersions(bool snapshots) {
     auto base = root;
     task(
@@ -475,6 +495,18 @@ void Launcher::refreshLoaders(const QString &version, const QString &loader) {
             emit catalogChanged();
         },{},"loaders");
 }
+void Launcher::createRustInstance(const QString &name) {
+    if(working)return;
+    try {
+        if(name.trimmed().isEmpty())throw Error("Give your Rust instance a name.");
+        const auto id=instanceFolderId(root+"/instances",name.trimmed().left(80));
+        const QJsonObject instance{{"schemaVersion",1},{"id",id},{"name",name.trimmed().left(80)},
+            {"engine","moly-rust"},{"version","26.3"},{"loader","Rust Edition"},
+            {"group","Rust instances"},{"settings",QJsonObject{}}};
+        QDir().mkpath(instanceDir(instance)+"/game/mods");storeInstance(instance);selectInstance(id);
+        emit navigate("instance");installSelected();
+    }catch(const std::exception &e){emit notice(QString::fromUtf8(e.what()),true);}
+}
 void Launcher::createInstance(const QString &name, const QString &version, const QString &loader,
                               const QString &loaderVersion, bool autoInstall) {
     if (working)
@@ -501,6 +533,37 @@ void Launcher::createInstance(const QString &name, const QString &version, const
     } catch (const std::exception &e) {
         emit notice(e.what(), true);
     }
+}
+QVariantMap Launcher::rustVisualSettings() const {
+    try {
+        if(current()["engine"]!="moly-rust")return {};
+        auto values=RustVisuals::read(instanceDir(current())+"/game");
+        const auto settings=current()["settings"].toObject();
+        if(settings.contains("rustVisuals"))values=settings["rustVisuals"].toObject();
+        values["managed"]=settings.contains("rustVisuals");return values.toVariantMap();
+    }catch(const std::exception &){return {};}
+}
+QVariantList Launcher::rustShaderPacks() const {
+    QVariantList out{QVariantMap{{"name","Off"},{"file",""}},QVariantMap{{"name","Moly Colour (included)"},{"file","Moly Colour"}}};
+    if(current().isEmpty())return out;
+    const QDir dir(instanceDir(current())+"/game/shaderpacks");
+    for(const auto &entry:dir.entryInfoList(QDir::Files|QDir::Dirs|QDir::NoDotAndDotDot,QDir::Name)) {
+        if(entry.isSymLink()||entry.fileName()=="Moly Colour"||entry.fileName().startsWith('.'))continue;
+        if((entry.isDir()&&(QDir(entry.absoluteFilePath()+"/shaders").exists()||QFileInfo::exists(entry.absoluteFilePath()+"/horizon-shaders.toml")))||QStringList{"zip","hshader"}.contains(entry.suffix().toLower()))
+            out.append(QVariantMap{{"name",entry.fileName()},{"file",entry.fileName()}});
+    }
+    return out;
+}
+void Launcher::saveRustVisualSettings(const QVariantMap &values) {
+    if(!editable())return;
+    try {
+        auto instance=current();if(instance["engine"]!="moly-rust")throw Error("Choose a Rust Edition instance.");
+        auto settings=instance["settings"].toObject();
+        if(!values.value("managed").toBool())settings.remove("rustVisuals");
+        else {auto visual=RustVisuals::validate(QJsonObject::fromVariantMap(values));visual.remove("managed");settings["rustVisuals"]=visual;}
+        instance["settings"]=settings;storeInstance(instance);
+        emit notice("Rust visuals saved. Changes apply at the next launch.",false);
+    }catch(const std::exception &e){emit notice(QString::fromUtf8(e.what()),true);}
 }
 void Launcher::saveInstance(const QVariantMap &values) {
     if (!editable())
@@ -684,6 +747,7 @@ void Launcher::play(bool offline) {
         return;
     if(!launchTarget.isEmpty())i["_quickPlay"]=launchTarget;
     auto account = QJsonObject::fromVariantMap(activeAccount());
+    if (account.isEmpty() && i["engine"]=="moly-rust")account={{"type","offline"},{"name","Player"}};
     if (account.isEmpty()) {
         emit notice("Add an account or offline profile before playing.", true);
         emit navigate("accounts");
@@ -694,7 +758,7 @@ void Launcher::play(bool offline) {
     auto dir = instanceDir(i);
     bool installed = QFileInfo::exists(dir + "/installation.json");
     if (offline && !installed) {
-        emit notice("Offline play needs an installed instance. Install it while connected first.", true);
+        emit notice("Offline play needs a prepared instance. Create or repair it from your included local library first.", true);
         return;
     }
     task(
@@ -709,7 +773,7 @@ void Launcher::play(bool offline) {
                 token = login.minecraftToken;
             }
             auto state =
-                installed ? readObject(dir + "/installation.json") : Minecraft(base, c).install(i, settings);
+                installed && i["engine"]!="moly-rust" ? readObject(dir + "/installation.json") : Minecraft(base, c).install(i, settings);
             return QJsonObject{{"state", state}, {"account", a}, {"token", token}};
         },
         [this, i](QJsonObject r) {
@@ -736,7 +800,7 @@ void Launcher::playTarget(const QString &instanceId,const QString &type,const QS
     }catch(const std::exception &e){launchTarget={};emit notice(QString::fromUtf8(e.what()),true);}
 }
 void Launcher::appendLog(const QString &id, const QString &text) {
-    auto cleaned = redact(text, processSecrets.value(id));
+    auto cleaned = redact(text, processSecrets.value(id)).replace("Horizon:","Moly:").replace("Horizon renderer:","Moly renderer:");
     auto &lines = logLines[id];
     for (const auto &line : cleaned.split('\n'))
         if (!line.isEmpty())
@@ -750,9 +814,15 @@ QString Launcher::logText() const {
 }
 void Launcher::launchProcess(QJsonObject instance, QJsonObject state, QJsonObject account, QString token) {
     auto id = instance["id"].toString();
+    if(instance["engine"]=="moly-rust")state["gameDirectory"]=instanceDir(instance)+"/game";
     auto cmd = Minecraft::command(state, instance, config, account, token);
     auto p = new QProcess(this);
     p->setWorkingDirectory(cmd.workingDirectory);
+    if(instance["engine"]=="moly-rust") {
+        auto environment=QProcessEnvironment::systemEnvironment();
+        environment.insert("HORIZON_NO_DISCORD","1");
+        p->setProcessEnvironment(environment);
+    }
     p->setProcessChannelMode(QProcess::MergedChannels);
     processSecrets[id] = {token};
     logLines[id].clear();
@@ -835,9 +905,14 @@ void Launcher::launchProcess(QJsonObject instance, QJsonObject state, QJsonObjec
             });
     processTargets[id]=instance["_quickPlay"].toObject();
     processes[id] = p;
-    appendLog(id, "[Moly] Launching " + instance["name"].toString() + " with Java " +
+    appendLog(id, instance["engine"]=="moly-rust" ? "[Moly] Launching Rust Edition / Creative Preview" : "[Moly] Launching " + instance["name"].toString() + " with Java " +
                       QString::number(state["javaMajor"].toInt()) +
                       (token.isEmpty() ? " · offline profile" : " · Microsoft account"));
+    if(instance["engine"]=="moly-rust"&&!token.isEmpty()) {
+        const auto session=QJsonDocument(QJsonObject{{"name",account["name"]},{"uuid",account["uuid"]},
+            {"access_token",token},{"user_type","msa"},{"xuid",account["xuid"]}}).toJson(QJsonDocument::Compact);
+        connect(p,&QProcess::started,p,[p,session]{p->write(session+'\n');p->closeWriteChannel();});
+    }
     p->start(cmd.program, cmd.arguments);
     selectInstance(id);
     emit changed();
@@ -1375,6 +1450,12 @@ void Launcher::startInstallChoices() {
 }
 void Launcher::beginInstall(const QVariantMap &project, const QString &requestedTarget,
                             const QString &versionId, bool automatic) {
+    if(project.value("type")=="mod") {
+        const auto target=requestedTarget.isEmpty()?installTargetId():requestedTarget;
+        for(const auto &instance:instanceList)if(instance["id"]==target&&instance["engine"]=="moly-rust"){
+            setInstallError("Rust Edition uses .rjar content mods. Java mod JARs cannot run in this engine.");return;
+        }
+    }
     if (working) {
         if (!automatic) {
             setInstallError("Another task is running. Confirm this install when it finishes.");
@@ -1723,9 +1804,13 @@ void Launcher::importFile(const QString &url, const QString &type) {
                         "datapacks folder.");
         auto path = localPath(url);
         auto filename = QFileInfo(path).fileName();
-        if (type == "mod" && !filename.endsWith(".jar", Qt::CaseInsensitive))
-            throw Error("Mods must be JAR files.");
-        if (type != "mod" && !filename.endsWith(".zip", Qt::CaseInsensitive))
+        const bool rust=current()["engine"]=="moly-rust";
+        if(rust&&type=="mod"&&!filename.endsWith(".rjar",Qt::CaseInsensitive))throw Error("Rust mods must be .rjar content packages.");
+        if(rust&&type=="mod")zipEntry(path,"horizon-mod.toml");
+        if(rust&&type=="shader"&&filename.endsWith(".hshader",Qt::CaseInsensitive))zipEntry(path,"horizon-shaders.toml");
+        if (!rust && type == "mod" && !filename.endsWith(".jar", Qt::CaseInsensitive))
+            throw Error("Java mods must be JAR files.");
+        if (type != "mod" && !filename.endsWith(".zip", Qt::CaseInsensitive) && !(rust&&type=="shader"&&filename.endsWith(".hshader",Qt::CaseInsensitive)))
             throw Error("Import a ZIP resource or shader pack.");
         QJsonObject f{{"title", filename},
                       {"filename", filename},

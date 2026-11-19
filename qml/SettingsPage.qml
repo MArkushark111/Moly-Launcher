@@ -243,6 +243,25 @@ Item {
                         Rectangle{Layout.fillWidth:true;height:1;color:Theme.border;Layout.topMargin:4;Layout.bottomMargin:4}
                     }
                 }
+                Panel {
+                    visible: page.section === 3 && !page.shell.localOnly
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: 12
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text: "Launcher updates · " + releaseUpdates.currentVersion; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
+                            MButton { text: "Check for updates"; loading: releaseUpdates.checking; enabled: !releaseUpdates.checking; onClicked: releaseUpdates.check() }
+                        }
+                        Text { text: releaseUpdates.status; color: Theme.textSecondary; font.pixelSize: 12; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text: "Check automatically on startup and every 6 hours"; color: Theme.text; font.pixelSize: 12; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                            MSwitch { checked: releaseUpdates.autoCheck; onClicked: releaseUpdates.autoCheck = checked }
+                        }
+                        MButton { visible: !!releaseUpdates.release.version; text: releaseUpdates.available ? "What’s new & update" : "View release notes"; kind: releaseUpdates.available ? "primary" : "secondary"; onClicked: page.shell.showLauncherUpdates() }
+                    }
+                }
                 Panel{visible:page.section===3;Layout.fillWidth:true
                     ColumnLayout{anchors.fill:parent;spacing:12
                         RowLayout{Layout.fillWidth:true;Text{text:"Welcome experience";color:Theme.text;font.pixelSize:14;Layout.fillWidth:true}MButton{text:"Replay introduction";iconName:"sparkle";onClicked:shell.replayIntro()}}

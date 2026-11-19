@@ -10,7 +10,8 @@ ApplicationWindow {
     minimumWidth: 1024
     minimumHeight: 640
     visible: startup.interfaceVisible
-    title: "Moly Launcher"
+    readonly property bool localOnly: typeof molyLocalEdition !== "undefined" && molyLocalEdition
+    title: localOnly ? "Moly Local Launcher" : "Moly Launcher"
     color: Theme.app
     font.family: Theme.fontFamily
     font.pixelSize: 13
@@ -54,7 +55,7 @@ ApplicationWindow {
     function pageSource() {
         switch (page) {
         case "library": return "LibraryPage.qml"
-        case "discover": return "DiscoverPage.qml"
+        case "discover": return localOnly ? "LocalLibraryPage.qml" : "DiscoverPage.qml"
         case "instance": return "InstancePage.qml"
         case "accounts": return "AccountsPage.qml"
         case "settings": return "SettingsPage.qml"
@@ -88,7 +89,7 @@ ApplicationWindow {
         fileAction = action; contentType = type || "mod"
         fileDialog.fileMode = ["log","share","export"].indexOf(action)>=0 ? FileDialog.SaveFile : FileDialog.OpenFile
         fileDialog.defaultSuffix=action==="export"?exportFormat:""
-        fileDialog.nameFilters = action==="skin" ? ["Minecraft skin (*.png)"] : action==="worldIcon" ? ["World image (*.png *.jpg *.jpeg *.webp)"] : ["icon","background"].indexOf(action)>=0 ? ["Artwork (*.gif *.png *.jpg *.jpeg *.webp *.bmp)"] : action==="export" ? [exportFormat.toUpperCase()+" pack (*."+exportFormat+")"] : action==="share" ? ["Content manifest (*.json)"] : action==="log" ? ["Text log (*.log *.txt)"] : action==="pack" ? ["Minecraft packs (*.mlypack *.mrpack *.zip)"] : ["Minecraft files (*.jar *.zip)","All files (*)"]
+        fileDialog.nameFilters = action==="skin" ? ["Minecraft skin (*.png)"] : action==="worldIcon" ? ["World image (*.png *.jpg *.jpeg *.webp)"] : ["icon","background"].indexOf(action)>=0 ? ["Artwork (*.gif *.png *.jpg *.jpeg *.webp *.bmp)"] : action==="export" ? [exportFormat.toUpperCase()+" pack (*."+exportFormat+")"] : action==="share" ? ["Content manifest (*.json)"] : action==="log" ? ["Text log (*.log *.txt)"] : action==="pack" ? ["Minecraft packs (*.mlypack *.mrpack *.zip)"] : ["Minecraft files (*.jar *.rjar *.zip *.hshader)","All files (*)"]
         fileDialog.open()
     }
     function chooseFolder(action) { folderAction = action; folderDialog.open() }
@@ -98,6 +99,7 @@ ApplicationWindow {
     function requestPackImport(path) { window.showNormal();window.raise();window.requestActivate();confirm("importPack","Import this Moly setup?","Moly will copy this pack into a new instance and prepare its game files.\n"+path,path) }
     function replayIntro() { welcomeIntro.replay() }
     function showAccountChooser() { accountChooser.open() }
+    function showLauncherUpdates() { launcherUpdates.open() }
     function openTaskCenter() { downloadPanel.open() }
     function showPendingInstance() {if(launcher.pendingPlan.title&&!launcher.busy)installModal.openReview();else downloadPanel.open()}
     Shortcut { sequence: "F11"; onActivated: window.visibility === Window.FullScreen ? window.showNormal() : window.showFullScreen() }
@@ -128,7 +130,7 @@ ApplicationWindow {
                         Layout.fillWidth:true;Layout.preferredHeight:56;spacing:11
                         Image {Layout.preferredWidth:38;Layout.preferredHeight:38;source:"../assets/moly.svg";sourceSize.width:76;sourceSize.height:76;smooth:true}
                         Text {text:"Moly";color:Theme.text;font.family:Theme.fontFamily;font.pixelSize:20;font.weight:Font.Bold;Layout.fillWidth:true}
-                        Text {text:"JAVA";color:Theme.textMuted;font.pixelSize:9;font.letterSpacing:1}
+                        Text {text:launcher.selected.engine==="moly-rust"?"RUST":"JAVA";color:Theme.textMuted;font.pixelSize:9;font.letterSpacing:1}
                     }
                     RowLayout {Layout.fillWidth:true
                         Text {text:"INSTANCES";color:Theme.textMuted;font.pixelSize:10;font.weight:Font.Medium;font.letterSpacing:0.8;Layout.fillWidth:true}
@@ -197,6 +199,7 @@ ApplicationWindow {
                         ScrollBar.vertical:ScrollBar{}
                         Text {visible:instanceRail.count===0;anchors.centerIn:parent;width:parent.width-20;text:"Create your first\nMinecraft instance";color:Theme.textSecondary;font.pixelSize:12;lineHeight:1.4;horizontalAlignment:Text.AlignHCenter;wrapMode:Text.Wrap}
                     }
+                    MButton { visible: !window.localOnly && releaseUpdates.available; text: "Update available"; iconName: "download"; kind: "primary"; Layout.fillWidth: true; onClicked: window.showLauncherUpdates() }
                     MButton {text:"New instance";iconName:"plus";kind:"secondary";Layout.fillWidth:true;enabled:!launcher.busy;onClicked:window.create()}
                 }
             }
@@ -206,7 +209,7 @@ ApplicationWindow {
                     Layout.fillWidth:true;Layout.fillHeight:true;clip:true
                     Loader {
                         id:pageLoader;objectName:"pageLoader";anchors.fill:parent
-                        source:window.page==="instance"?"InstancePage.qml":window.page==="discover"?"DiscoverPage.qml":window.page==="accounts"?"AccountsPage.qml":window.page==="settings"?"SettingsPage.qml":window.page==="skins"?"SkinsPage.qml":"LibraryPage.qml"
+                        source:window.page==="instance"?"InstancePage.qml":window.page==="discover"?(window.localOnly?"LocalLibraryPage.qml":"DiscoverPage.qml"):window.page==="accounts"?"AccountsPage.qml":window.page==="settings"?"SettingsPage.qml":window.page==="skins"?"SkinsPage.qml":"LibraryPage.qml"
                         onLoaded:{item.shell=window;pageFade.restart();Qt.callLater(window.focusGameLogs)}
                         SequentialAnimation {id:pageFade;PropertyAction{target:pageLoader;property:"opacity";value:Theme.motion?0:1}PropertyAction{target:pageLoader;property:"anchors.topMargin";value:Theme.motion?8:0}ParallelAnimation{NumberAnimation{target:pageLoader;property:"opacity";to:1;duration:Theme.motion?210:0;easing.type:Easing.OutQuint}NumberAnimation{target:pageLoader;property:"anchors.topMargin";to:0;duration:Theme.motion?270:0;easing.type:Easing.OutQuint}}}
                     }
@@ -220,7 +223,7 @@ ApplicationWindow {
             TabStrip {
                 id:mainDock
                 anchors.centerIn:parent;height:52;width:implicitWidth
-                tabs:[{label:"Library",icon:"library"},{label:"Discover",icon:"discover"},{label:"Wardrobe",icon:"skin"},{label:"Accounts",icon:"accounts"},{label:"Settings",icon:"settings"}]
+                tabs:[{label:"Library",icon:"library"},{label:window.localOnly?"Local files":"Discover",icon:window.localOnly?"folder":"discover"},{label:"Wardrobe",icon:"skin"},{label:"Accounts",icon:"accounts"},{label:"Settings",icon:"settings"}]
                 currentIndex:window.page==="discover"?1:window.page==="skins"?2:window.page==="accounts"?3:window.page==="settings"?4:0
                 onActivated:function(index){window.page=["library","discover","skins","accounts","settings"][index]}
             }
@@ -264,6 +267,7 @@ ApplicationWindow {
     function editServer(entry) {serverDialog.edit(entry)}
     function addServer() {serverDialog.edit({instanceId:launcher.selectedId})}
     DownloadManager {id:downloadPanel;shell:window}
+    LauncherUpdates {id:launcherUpdates}
     InstallDialog{id:installModal;shell:window}
     ImportInstancesDialog{id:localImport;shell:window}
     FileDialog {
@@ -285,7 +289,11 @@ ApplicationWindow {
             else launcher.importFile(path,contentType)
         }
     }
-    FolderDialog{id:folderDialog;onAccepted:folderAction==="localImport"?localImport.scanFolder(selectedFolder.toString()):launcher.relocate(selectedFolder.toString())}
+    FolderDialog{id:folderDialog;onAccepted: {
+        if (folderAction === "localImport") localImport.scanFolder(selectedFolder.toString())
+        else if (folderAction === "localLibrary") launcher.importLocalLibrary(selectedFolder.toString())
+        else launcher.relocate(selectedFolder.toString())
+    }}
     CreateInstanceDialog {id:createDialog;shell:window}
     LiquidDialog {
         id:confirmDialog;anchors.centerIn:parent;width:480;modal:true;padding:24;closePolicy:Popup.CloseOnEscape

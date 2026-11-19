@@ -44,7 +44,7 @@ Item {
         tab = index;
         tabAnimation.restart();
     }
-    function browseContent() { shell.browse(type) }
+    function browseContent() { if(shell.localOnly)shell.chooseFile(type);else shell.browse(type) }
     Connections { target:launcher; function onChanged(){page.revision++;Qt.callLater(page.refreshFiles)} }
     ContentVersionsDialog {id:versionDialog}
     DropArea {anchors.fill:parent;onDropped:function(drop){if(!drop.hasUrls||launcher.busy||instance.running)return;for(let url of drop.urls)if(url.toString().toLowerCase().endsWith(".jar")){launcher.importFile(url.toString(),"mod");drop.acceptProposedAction();break}}}
@@ -72,6 +72,7 @@ Item {
                 }
             }
             MButton{id:playButton;objectName:"instancePlayButton";loading:launcher.busy&&launcher.taskInstanceId===instance.id;text:loading?(launcher.taskOperation==="launch"?"Starting":"Installing…"):instance.running?"Stop":instance.installed?"Play":"Install game";iconName:instance.running?"stop":instance.installed?"play":"download";kind:instance.running?"danger":"primary";implicitHeight:42;implicitWidth:loading?148:instance.installed||instance.running?110:138;enabled:!launcher.busy;onClicked:instance.running?shell.confirm("stop","Stop Minecraft?","Save and close your world in Minecraft first. Stopping the process can lose unsaved changes."):instance.installed?launcher.play():launcher.installSelected()}
+            MButton {visible:instance.engine==="moly-rust";text:"Visuals";iconName:"world";onClicked:{switchTab(5);rustSettings.section=3}}
             MButton{iconName:"settings";kind:tab===5?"primary":"secondary";implicitHeight:42;implicitWidth:42;onClicked:switchTab(5);Accessible.name:"Instance settings"}
             MButton{iconName:"more";kind:"ghost";onClicked:instanceMenu.open();Accessible.name:"More instance actions"
                 MMenu {id:instanceMenu;objectName:"instanceMenu"
@@ -115,7 +116,7 @@ Item {
                 RowLayout{Layout.fillWidth:true;spacing:8
                     MField{id:contentSearch;onTextChanged:Qt.callLater(page.refilterFiles);placeholderText:"Search "+page.installedFiles.length+" installed files…";Layout.fillWidth:true}
                     MButton{text:"Add files";iconName:"plus";enabled:!launcher.busy&&!instance.running;onClicked:shell.chooseFile("content",page.type)}
-                    MButton{text:"Browse "+(page.type==="mod"?"mods":page.type==="shader"?"shaders":"packs");iconName:"discover";kind:"primary";enabled:!launcher.busy&&!instance.running;onClicked:page.browseContent()}
+                    MButton{text:shell.localOnly?"Add local files":"Browse "+(page.type==="mod"?"mods":page.type==="shader"?"shaders":"packs");iconName:"discover";kind:"primary";enabled:!launcher.busy&&!instance.running;onClicked:page.browseContent()}
                 }
                 RowLayout{Layout.fillWidth:true;spacing:8
                     MComboBox {id:contentChoice;Layout.preferredWidth:170;model:[{text:"Mods",value:"mod"},{text:"Resource packs",value:"resourcepack"},{text:"Shaders",value:"shader"}];textRole:"text";valueRole:"value"}
@@ -159,7 +160,7 @@ Item {
                             ColumnLayout{visible:fileList.count===0;anchors.centerIn:parent;spacing:10
                                 Icon{name:"box";size:28;color:Theme.textMuted;Layout.alignment:Qt.AlignHCenter}
                                 Text{text:contentSearch.text?"No matching files":"No "+(page.type==="mod"?"mods":page.type==="shader"?"shaders":"resource packs")+" installed";color:Theme.textSecondary;font.pixelSize:14;Layout.alignment:Qt.AlignHCenter}
-                                MButton{text:"Browse content";kind:"primary";Layout.alignment:Qt.AlignHCenter;onClicked:page.browseContent();enabled:!launcher.busy&&!instance.running}
+                                MButton{text:shell.localOnly?"Add local files":"Browse content";kind:"primary";Layout.alignment:Qt.AlignHCenter;onClicked:page.browseContent();enabled:!launcher.busy&&!instance.running}
                                 Text{text:"You can also drop a .jar here.";visible:page.type==="mod";color:Theme.textMuted;font.pixelSize:12;Layout.alignment:Qt.AlignHCenter}
                             }
                         }
@@ -230,7 +231,7 @@ Item {
                     MButton{text:"Export ."+page.exportKind;iconName:"share";kind:"primary";enabled:!launcher.busy&&!instance.running;onClicked:shell.exportSetup(page.exportKind,page.exportKind!=="mrpack"&&exportWorlds.checked,{mods:exportMods.checked,configs:exportConfigs.checked,resourcepacks:exportResources.checked,shaders:exportShaders.checked,settings:exportSettings.checked,artwork:exportArt.checked,worlds:exportWorlds.checked})}
                 }
             }
-            InstanceSettings { instance: page.instance; shell: page.shell; revision: page.revision }
+            InstanceSettings { id:rustSettings;instance: page.instance; shell: page.shell; revision: page.revision }
         }
     }
 }

@@ -14,10 +14,15 @@ class SkinTests : public QObject {
     void defaultLibraryContainsMinecraftCharacters() {
         QTemporaryDir root;
         SkinStore store(root.path());
+#ifdef MOLY_PUBLIC_BUILD
+        QCOMPARE(store.skins().size(), 1);
+        QCOMPARE(store.skins()[0].toMap()["name"].toString(), QString("Moly"));
+#else
         QCOMPARE(store.skins().size(),9);
         QCOMPARE(store.skins()[0].toMap()["name"].toString(),QString("Steve"));
         QCOMPARE(store.skins()[1].toMap()["name"].toString(),QString("Alex"));
         QCOMPARE(store.skins()[1].toMap()["model"].toString(),QString("slim"));
+#endif
         QVERIFY(store.error().isEmpty());
         auto image=SkinStore::readSkin(QUrl(store.selectedSkinUrl()).toLocalFile());
         QCOMPARE(image.size(),QSize(64,64));
@@ -28,8 +33,9 @@ class SkinTests : public QObject {
         SkinStore store(root.path());
         QImage invalid(65,64,QImage::Format_ARGB32);invalid.fill(Qt::red);
         const auto path=root.path()+"/bad.png";QVERIFY(invalid.save(path));
+        const auto previous = store.selectedSkinId();
         QVERIFY(!store.importSkin(path));
-        QCOMPARE(store.selectedSkinId(),QString("default-steve"));
+        QCOMPARE(store.selectedSkinId(), previous);
         QVERIFY(!store.error().isEmpty());
         QVERIFY(!store.importSkin("https://example.com/skin.png"));
         QVERIFY(!store.importSkin(path,"unknown"));
@@ -41,9 +47,14 @@ class SkinTests : public QObject {
             QCOMPARE(store.selectedSkinId(),item["id"].toString());
             QCOMPARE(SkinStore::readSkin(QUrl(store.selectedSkinUrl()).toLocalFile()).size(),QSize(64,64));
         }
-        store.selectSkin("default-alex");QCOMPARE(store.selectedModel(),QString("slim"));
-        store.setSelectedModel("classic");QVERIFY(store.selectedSkinUrl().contains("default-alex-classic.png"));
-        SkinStore restored(root.path());QCOMPARE(restored.selectedSkinId(),QString("default-alex"));QCOMPARE(restored.selectedModel(),QString("classic"));
+        const auto id = store.skins().first().toMap()["id"].toString();
+        store.selectSkin(id);
+        store.setSelectedModel("slim");
+        QCOMPARE(store.selectedModel(), QString("slim"));
+        QVERIFY(store.selectedSkinUrl().contains(id + "-slim.png"));
+        SkinStore restored(root.path());
+        QCOMPARE(restored.selectedSkinId(), id);
+        QCOMPARE(restored.selectedModel(), QString("slim"));
     }
     void importedCopyAndModelSurviveReload() {
         QTemporaryDir root;

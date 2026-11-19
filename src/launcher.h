@@ -171,10 +171,15 @@ class Launcher : public QObject {
     Q_INVOKABLE void registerPackFiles();
     Q_INVOKABLE void loadInstallChoices(const QVariantMap &project, const QString &instanceId = QString());
     Q_INVOKABLE void selectInstance(const QString &id);
+    Q_INVOKABLE void importLocalLibrary(const QString &url);
     Q_INVOKABLE void refreshVersions(bool snapshots = false);
     Q_INVOKABLE void refreshLoaders(const QString &version, const QString &loader);
+    Q_INVOKABLE void createRustInstance(const QString &name);
     Q_INVOKABLE void createInstance(const QString &name, const QString &version, const QString &loader,
                                     const QString &loaderVersion, bool autoInstall = true);
+    Q_INVOKABLE QVariantMap rustVisualSettings() const;
+    Q_INVOKABLE QVariantList rustShaderPacks() const;
+    Q_INVOKABLE void saveRustVisualSettings(const QVariantMap &values);
     Q_INVOKABLE void saveInstance(const QVariantMap &values);
     Q_INVOKABLE void setInstanceIcon(const QString &url);
     Q_INVOKABLE void resetInstanceIcon();

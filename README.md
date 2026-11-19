@@ -2,7 +2,7 @@
 
 A Windows Minecraft Java Edition launcher built with C++20 and Qt Quick. Moly keeps each Minecraft setup in its own **instance**, so its worlds, mods, resource packs, and shaders stay together.
 
-This is a **0.8.3 preview**. The launcher has working installation and local launch paths; Microsoft browser sign-in uses Moly’s registered public application. Minecraft Services access and ownership are checked during login. Existing CurseForge credentials stay in Windows Credential Manager.
+This is a **0.8.5 preview**. The launcher has working installation and local launch paths; Microsoft browser sign-in uses Moly’s registered public application. Minecraft Services access and ownership are checked during login. Existing CurseForge credentials stay in Windows Credential Manager.
 
 ## Run the portable build
 
@@ -141,3 +141,7 @@ The compact startup screen counts four completed local stages: library, player a
 Saved server cards show their validated icon, first MOTD line, player count and measured connection time. Use the circular arrow to check one server or the copy icon to copy its address. Icons remain available from Moly's cache after restarting; a server without a usable picture gets the server-rack symbol.
 
 The local source list also includes Dawn Client, Fast Client, NoRisk Client, Badlion Client, LabyMod, Feather, and GDLauncher. Fast Client's local profile index and NoRisk's current profile database are recognized. Other layouts can use ordinary game folders with explicit version selection. Client accounts, cosmetics, bundled features and custom launch components are not migrated.
+
+## Moly Local Launcher
+
+Open **Local files → Import Minecraft files** and choose the Minecraft data folder containing `versions`, `assets`, and `libraries`. You can also choose an existing Moly data folder. Launch the desired vanilla version from your existing Minecraft installation first so its files are complete. Moly Local verifies the game files it copies. Its installer contains the launcher and its dependencies. Use a matching Java runtime and sign in with your own Microsoft account for online play.

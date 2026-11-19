@@ -16,6 +16,7 @@ public:
     QJsonObject form(const QString &url,const QMap<QString,QString> &fields,bool allowError=false);
     void downloads(const QList<Download> &items);
     Context ctx;
+    QString localGameSource, localGameDestination;
 private:
     QNetworkAccessManager manager;
 };

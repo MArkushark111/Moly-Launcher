@@ -1,4 +1,5 @@
 #include "network.h"
+#include "localedition.h"
 #include <QCryptographicHash>
 #include <QDir>
 #include <QElapsedTimer>
@@ -8,6 +9,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSaveFile>
+#include <QRegularExpression>
 #include <QTimer>
 #include <QUrlQuery>
 #include <memory>
@@ -27,6 +29,8 @@ static QNetworkRequest makeRequest(const QString &url) {
 QByteArray Network::request(const QString &url, const QByteArray &body, const QByteArray &type,
                             const QMap<QByteArray, QByteArray> &headers, bool allowError) {
     ctx.check();
+    if(localEdition()&&!QStringList{"login.microsoftonline.com","login.live.com","user.auth.xboxlive.com","xsts.auth.xboxlive.com","api.minecraftservices.com"}.contains(QUrl(url).host().toLower()))
+        throw Error("Moly Local Launcher uses included files only. Cloud game/content requests are disabled.");
     auto r = makeRequest(url);
     if(headers.contains("Authorization"))r.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::SameOriginRedirectPolicy);
     for (auto i = headers.begin(); i != headers.end(); ++i)
@@ -98,11 +102,39 @@ void Network::downloads(const QList<Download> &items) {
             (download.hash.isEmpty() ||
              fileHash(download.path, download.algorithm).compare(download.hash, Qt::CaseInsensitive) == 0))
             continue;
-        makeRequest(download.url);
+        if (localEdition() && !localGameSource.isEmpty()) {
+            const auto relative = QDir(localGameDestination).relativeFilePath(download.path);
+            const auto source = safePath(localGameSource, relative);
+            const QFileInfo info(source);
+            if (!info.isFile() || info.isSymLink() || info.size() > download.maximumSize
+                || (download.size >= 0 && info.size() != download.size)
+                || !QRegularExpression("^[a-fA-F0-9]{40}$").match(download.hash).hasMatch())
+                throw Error("Missing or invalid local Minecraft file: " + relative);
+            QFile input(source);
+            QDir().mkpath(QFileInfo(download.path).absolutePath());
+            QSaveFile output(download.path);
+            if (!input.open(QIODevice::ReadOnly) || !output.open(QIODevice::WriteOnly))
+                throw Error("Could not import " + relative);
+            QCryptographicHash hash(QCryptographicHash::Sha1);
+            ctx.report("Importing " + info.fileName());
+            while (!input.atEnd()) {
+                ctx.check();
+                const auto chunk = input.read(1024 * 1024);
+                if (chunk.isEmpty() || output.write(chunk) != chunk.size())
+                    throw Error("Could not copy " + relative);
+                hash.addData(chunk);
+            }
+            if (QString::fromLatin1(hash.result().toHex()).compare(download.hash, Qt::CaseInsensitive) != 0
+                || !output.commit())
+                throw Error("Could not verify or save " + relative);
+            continue;
+        }
+        if (!localEdition()) makeRequest(download.url);
         todo.append(download);
     }
     if (todo.isEmpty())
         return;
+    if(localEdition())throw Error("Required local game file is missing or damaged: "+QFileInfo(todo.first().path).fileName()+". Import a complete local copy of this version.");
 
     struct Active {
         Download download;

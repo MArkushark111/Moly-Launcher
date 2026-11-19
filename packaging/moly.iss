@@ -2,25 +2,25 @@
 ; Build after packaging with: ISCC.exe packaging\moly.iss
 
 #ifndef AppSource
-  #define AppSource "..\dist\MolyLauncher-0.8.4"
+  #define AppSource "..\dist\MolyLauncher-0.8.5"
 #endif
 [Setup]
 AppId={{168DBEC3-1C53-44B5-ADB7-587233624632}
 AppName=Moly Launcher
-AppVersion=0.8.4
+AppVersion=0.8.5
 AppPublisher=Moly
 AppCopyright=Copyright (C) 2026 Moly
 AppPublisherURL=https://github.com/MArkushark111/Moly-Launcher
 AppSupportURL=https://github.com/MArkushark111/Moly-Launcher/issues
 AppUpdatesURL=https://github.com/MArkushark111/Moly-Launcher/releases
-VersionInfoVersion=0.8.4.0
+VersionInfoVersion=0.8.5.0
 VersionInfoCompany=Moly
 VersionInfoDescription=Moly Launcher Setup
-VersionInfoTextVersion=0.8.4
+VersionInfoTextVersion=0.8.5
 VersionInfoCopyright=Copyright (C) 2026 Moly
 VersionInfoProductName=Moly Launcher
-VersionInfoProductVersion=0.8.4
-VersionInfoProductTextVersion=0.8.4
+VersionInfoProductVersion=0.8.5
+VersionInfoProductTextVersion=0.8.5
 ; {autopf} resolves to Program Files for an all-users install and to
 ; %LocalAppData%\Programs for a single-user install.
 DefaultDirName={autopf}\Moly Launcher
@@ -35,7 +35,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 OutputDir=..\dist
-OutputBaseFilename=MolyLauncher-0.8.4-Windows-x64-Setup
+OutputBaseFilename=MolyLauncher-0.8.5-Windows-x64-Setup
 SetupIconFile=..\assets\moly.ico
 Compression=lzma2
 SolidCompression=yes

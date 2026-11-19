@@ -103,12 +103,23 @@ static void validateZip(QZipReader &z) {
         p=p.toLower(); if(seen.contains(p)) throw Error("Archive contains duplicate file paths."); seen.insert(p);
     }
 }
+static QByteArray checkedZipData(QZipReader &zip, const QZipReader::FileInfo &info) {
+    auto data=zip.fileData(info.filePath);
+    const auto valid=[&]{return data.size()==info.size && crc32(data)==info.crc && zip.status()==QZipReader::NoError;};
+    if(valid())return data;
+    // Qt 6.11 decodes UTF-8 correctly in fileInfoList(), but fileData() looks
+    // up raw ZIP names with fromLocal8Bit(). Supply that same lookup spelling
+    // when Windows' active code page differs. Keep the original extraction
+    // path and require the expected size and CRC for either result.
+    const auto lookup=QString::fromLocal8Bit(info.filePath.toUtf8());
+    if(lookup!=info.filePath){data=zip.fileData(lookup);if(valid())return data;}
+    throw Error("Corrupt archive entry: "+info.filePath);
+}
 QByteArray zipEntry(const QString &zip,const QString &entry) {
     QZipReader z(zip);validateZip(z);
     for(const auto &info:z.fileInfoList())if(info.filePath==entry){
         if(info.size>32ll*1024*1024)throw Error("Archive metadata entry is too large: "+entry);
-        const auto bytes=z.fileData(entry);
-        if(bytes.size()!=info.size||crc32(bytes)!=info.crc||z.status()!=QZipReader::NoError)throw Error("Corrupt archive entry: "+entry);
+        const auto bytes=checkedZipData(z,info);
         return bytes;
     }
     throw Error("Archive is missing "+entry);
@@ -133,7 +144,7 @@ void extractZip(const QString &zip,const QString &dest,const QString &prefix,boo
         QString name=f.filePath.mid(prefix.size()); if(name.isEmpty()) continue;
         if(natives && !name.endsWith(".dll",Qt::CaseInsensitive)) continue;
         if(natives) name=QFileInfo(name).fileName();
-        auto data=z.fileData(f.filePath); if(data.size()!=f.size || crc32(data)!=f.crc || z.status()!=QZipReader::NoError) throw Error("Corrupt archive entry: "+name);
+        auto data=checkedZipData(z,f);
         const auto path=safePath(dest,name);
         if(atomicWrites)writeBytes(path,data);
         else{

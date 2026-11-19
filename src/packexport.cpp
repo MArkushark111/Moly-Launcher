@@ -1,4 +1,5 @@
 #include "packexport.h"
+#include "rustvisuals.h"
 #include <QDateTime>
 #include <QDir>
 #include <QDirIterator>
@@ -47,6 +48,7 @@ bool gameFileAllowed(const QString &relative, bool includeWorlds) {
 
 QJsonObject portableSettings(const QJsonObject &source) {
     QJsonObject result;
+    if(source["rustVisuals"].isObject())result["rustVisuals"]=RustVisuals::validate(source["rustVisuals"].toObject());
     for (const auto &key : {"memoryMb", "width", "height"}) {
         if (!source.contains(key))
             continue;
@@ -67,14 +69,15 @@ QJsonObject portableSettings(const QJsonObject &source) {
 
 QJsonObject portableInstance(const QJsonObject &source) {
     const auto version = source["version"].toString();
+    const bool rust=source["engine"]=="moly-rust";
     const auto loader = source["loader"].toString("Vanilla");
     static const QRegularExpression versionPattern("^[a-zA-Z0-9][a-zA-Z0-9._+\\-]{0,95}$");
     if (!versionPattern.match(version).hasMatch())
         throw Error("The instance has an unsupported Minecraft version identifier.");
-    if (!QStringList{"Vanilla", "Fabric", "Forge", "NeoForge", "Quilt"}.contains(loader))
+    if (!(rust&&loader=="Rust Edition") && !QStringList{"Vanilla", "Fabric", "Forge", "NeoForge", "Quilt"}.contains(loader))
         throw Error("The pack requests an unsupported mod loader.");
     const auto loaderVersion = source["loaderVersion"].toString();
-    if (loader != "Vanilla" && !versionPattern.match(loaderVersion).hasMatch())
+    if (!rust && loader != "Vanilla" && !versionPattern.match(loaderVersion).hasMatch())
         throw Error("The instance needs a valid mod-loader version before it can be exported.");
     const auto name = source["name"].toString().trimmed().left(80);
     if (name.isEmpty())
@@ -82,6 +85,7 @@ QJsonObject portableInstance(const QJsonObject &source) {
     QJsonObject result{{"schemaVersion", 1}, {"name", name}, {"version", version}, {"loader", loader},
                        {"group", source["group"].toString().left(64)},
                        {"settings", portableSettings(source["settings"].toObject())}};
+    if(rust)result["engine"]="moly-rust";
     if (!loaderVersion.isEmpty())
         result["loaderVersion"] = loaderVersion;
     for (const auto &field : {"iconFile", "backgroundFile"}) {
@@ -218,6 +222,7 @@ void PackExport::write(const QString &root, const QJsonObject &instance, const Q
         target.compare(rootPath + "/settings.json",Qt::CaseInsensitive)==0 ||
         target.compare(rootPath + "/accounts.json",Qt::CaseInsensitive)==0)
         throw Error("Save the export outside the instance folders and launcher settings.");
+    if(instance["engine"]=="moly-rust"&&format=="mrpack")throw Error("Rust Edition uses .mlypack or portable ZIP. Modrinth packs target Java Edition.");
     auto descriptor = portableInstance(instance);
     auto content = safeContent(readObject(source + "/content.json", true));
     auto managed = managedFiles(content);
